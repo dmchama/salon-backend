@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  OWNER
+  CUSTOMER
+}
+
+enum SalonStatus {
+  DRAFT
+  PUBLISHED
+  SUSPENDED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum OwnerSubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  PAST_DUE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  firstName    String?  @map("first_name")
+  lastName     String?  @map("last_name")
+  phone        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  ownedSalons        Salon[]             @relation("SalonOwner")
+  bookingsAsCustomer Booking[]          @relation("CustomerBookings")
+  ownerSubscriptions OwnerSubscription[]
+
+  @@map("users")
+}
+
+model SubscriptionPlan {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?  @db.Text
+  priceCents     Int      @map("price_cents")
+  currency       String   @default("USD")
+  intervalMonths Int      @default(1) @map("interval_months")
+  features       Json?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  ownerSubscriptions OwnerSubscription[]
+
+  @@map("subscription_plans")
+}
+
+model OwnerSubscription {
+  id        String                  @id @default(uuid())
+  ownerId   String                  @map("owner_id")
+  planId    String                  @map("plan_id")
+  startsAt  DateTime                @map("starts_at")
+  expiresAt DateTime                @map("expires_at")
+  status    OwnerSubscriptionStatus @default(ACTIVE)
+  createdAt DateTime                @default(now()) @map("created_at")
+  updatedAt DateTime                @updatedAt @map("updated_at")
+
+  owner User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  plan  SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([ownerId])
+  @@index([expiresAt])
+  @@index([status])
+  @@map("owner_subscriptions")
+}
+
+model Salon {
+  id          String      @id @default(uuid())
+  ownerId     String      @map("owner_id")
+  name        String
+  slug        String      @unique
+  description String?     @db.Text
+  address     String?
+  city        String?
+  country     String?
+  status      SalonStatus @default(DRAFT)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  owner    User          @relation("SalonOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  services Service[]
+  bookings Booking[]
+  gallery  GalleryItem[]
+
+  @@index([name])
+  @@index([city])
+  @@index([ownerId])
+  @@index([status])
+  @@map("salons")
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  salonId     String   @map("salon_id")
+  name        String
+  description String?  @db.Text
+  durationMin Int      @map("duration_min")
+  priceCents  Int      @map("price_cents")
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  salon    Salon     @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([salonId])
+  @@map("services")
+}
+
+model Booking {
+  id         String        @id @default(uuid())
+  customerId String        @map("customer_id")
+  salonId    String        @map("salon_id")
+  serviceId  String        @map("service_id")
+  startAt    DateTime      @map("start_at")
+  endAt      DateTime      @map("end_at")
+  status     BookingStatus @default(PENDING)
+  notes      String?       @db.Text
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  customer User    @relation("CustomerBookings", fields: [customerId], references: [id])
+  salon    Salon   @relation(fields: [salonId], references: [id])
+  service  Service @relation(fields: [serviceId], references: [id])
+
+  @@index([customerId])
+  @@index([salonId])
+  @@index([startAt])
+  @@index([status])
+  @@index([salonId, startAt])
+  @@map("bookings")
+}
+
+model GalleryItem {
+  id        String   @id @default(uuid())
+  salonId   String   @map("salon_id")
+  url       String
+  caption   String?
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  salon Salon @relation(fields: [salonId], references: [id], onDelete: Cascade)
+
+  @@index([salonId])
+  @@map("gallery_items")
+}
