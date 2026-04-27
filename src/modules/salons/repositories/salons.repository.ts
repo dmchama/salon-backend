@@ -14,6 +14,23 @@ export class SalonsRepository {
     return this.prisma.salon.findUnique({ where: { slug } });
   }
 
+  findPublishedWithDetails(slug: string) {
+    return this.prisma.salon.findUnique({
+      where: { slug },
+      include: {
+        services: {
+          where: { active: true },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        },
+        technicians: {
+          where: { active: true },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        },
+        gallery: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
+      },
+    });
+  }
+
   findById(id: string): Promise<Salon | null> {
     return this.prisma.salon.findUnique({ where: { id } });
   }
@@ -24,5 +41,9 @@ export class SalonsRepository {
 
   updateStatus(id: string, status: SalonStatus): Promise<Salon> {
     return this.prisma.salon.update({ where: { id }, data: { status } });
+  }
+
+  update(id: string, data: Prisma.SalonUpdateInput): Promise<Salon> {
+    return this.prisma.salon.update({ where: { id }, data });
   }
 }

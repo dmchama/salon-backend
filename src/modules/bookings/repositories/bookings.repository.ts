@@ -17,15 +17,7 @@ export class BookingsRepository {
   findByIdWithRelations(id: string) {
     return this.prisma.booking.findUnique({
       where: { id },
-      include: { customer: true, salon: true, service: true },
-    });
-  }
-
-  listForCustomer(customerId: string) {
-    return this.prisma.booking.findMany({
-      where: { customerId },
-      orderBy: { startAt: 'desc' },
-      include: { salon: true, service: true },
+      include: { customer: true, salon: true, service: true, technician: true },
     });
   }
 
@@ -33,12 +25,24 @@ export class BookingsRepository {
     return this.prisma.booking.findMany({
       where: { salon: { id: salonId, ownerId } },
       orderBy: { startAt: 'desc' },
-      include: { customer: true, service: true },
+      include: { customer: true, service: true, technician: true },
+    });
+  }
+
+  listForSalon(salonId: string) {
+    return this.prisma.booking.findMany({
+      where: { salonId },
+      orderBy: { startAt: 'desc' },
+      include: { customer: true, service: true, technician: true },
     });
   }
 
   updateStatus(id: string, status: BookingStatus): Promise<Booking> {
     return this.prisma.booking.update({ where: { id }, data: { status } });
+  }
+
+  updateSchedule(id: string, startAt: Date, endAt: Date): Promise<Booking> {
+    return this.prisma.booking.update({ where: { id }, data: { startAt, endAt } });
   }
 
   hasOverlappingBooking(salonId: string, startAt: Date, endAt: Date, excludeId?: string) {

@@ -9,7 +9,7 @@ export class GalleryService {
   constructor(private readonly prisma: PrismaService) {}
 
   async addItem(dto: CreateGalleryItemDto, ownerId: string, role: Role) {
-    if (role !== Role.OWNER) {
+    if (role !== Role.SALON_ADMIN) {
       throw new DomainException('FORBIDDEN', 'Only owners manage gallery', 403);
     }
     const salon = await this.prisma.salon.findFirst({
@@ -32,5 +32,19 @@ export class GalleryService {
       where: { salonId },
       orderBy: { sortOrder: 'asc' },
     });
+  }
+
+  async remove(itemId: string, ownerId: string, role: Role) {
+    if (role !== Role.SALON_ADMIN) {
+      throw new DomainException('FORBIDDEN', 'Only owners manage gallery', 403);
+    }
+    const item = await this.prisma.galleryItem.findFirst({
+      where: { id: itemId },
+      include: { salon: true },
+    });
+    if (!item || item.salon.ownerId !== ownerId) {
+      throw new DomainException('NOT_FOUND', 'Gallery item not found', 404);
+    }
+    await this.prisma.galleryItem.delete({ where: { id: itemId } });
   }
 }

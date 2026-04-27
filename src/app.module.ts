@@ -22,6 +22,7 @@ import { GalleryModule } from './modules/gallery/gallery.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { SearchModule } from './modules/search/search.module';
+import { TechniciansModule } from './modules/technicians/technicians.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -70,6 +71,7 @@ import { HealthController } from './health/health.controller';
     GalleryModule,
     AdminModule,
     SearchModule,
+    TechniciansModule,
   ],
   controllers: [HealthController],
   providers: [

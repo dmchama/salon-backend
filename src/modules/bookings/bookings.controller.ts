@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
+import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser, JwtPayloadUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -8,33 +9,51 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
+import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
 
 @ApiTags('bookings')
-@ApiBearerAuth('access-token')
 @Controller({ path: 'bookings', version: '1' })
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
+  @Public()
   @Post()
-  @Roles(Role.CUSTOMER)
-  create(@Body() dto: CreateBookingDto, @CurrentUser() user: JwtPayloadUser) {
-    return this.bookingsService.create(dto, user.sub, user.role as Role);
+  create(@Body() dto: CreateBookingDto) {
+    return this.bookingsService.create(dto);
   }
 
-  @Get('me')
-  @Roles(Role.CUSTOMER)
-  listMine(@CurrentUser() user: JwtPayloadUser) {
-    return this.bookingsService.listMine(user.sub, user.role as Role);
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Get('salon/:salonId')
+  @Roles(Role.SUPER_ADMIN, Role.SALON_ADMIN)
+  listForSalon(
+    @Param('salonId') salonId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.bookingsService.listForSalon(salonId, user.sub, user.role as Role);
   }
 
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Patch(':id/status')
-  @Roles(Role.ADMIN, Role.OWNER, Role.CUSTOMER)
+  @Roles(Role.SUPER_ADMIN, Role.SALON_ADMIN)
   updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateBookingStatusDto,
     @CurrentUser() user: JwtPayloadUser,
   ) {
     return this.bookingsService.updateStatus(id, dto.status, user.sub, user.role as Role);
+  }
+
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Patch(':id/schedule')
+  @Roles(Role.SUPER_ADMIN, Role.SALON_ADMIN)
+  reschedule(
+    @Param('id') id: string,
+    @Body() dto: RescheduleBookingDto,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.bookingsService.reschedule(id, dto.startAt, user.sub, user.role as Role);
   }
 }

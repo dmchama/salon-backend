@@ -23,7 +23,7 @@ export class SubscriptionPlansController {
   @Post()
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN)
   create(@Body() dto: CreatePlanDto, @CurrentUser() user: JwtPayloadUser) {
     return this.subscriptionPlansService.create(dto, user.role as Role);
   }

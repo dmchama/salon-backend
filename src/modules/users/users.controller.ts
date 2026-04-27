@@ -15,7 +15,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
-  @Roles(Role.ADMIN, Role.OWNER, Role.CUSTOMER)
+  @Roles(Role.SUPER_ADMIN, Role.SALON_ADMIN)
   async me(@CurrentUser() user: JwtPayloadUser) {
     const full = await this.usersService.findById(user.sub);
     if (!full) {

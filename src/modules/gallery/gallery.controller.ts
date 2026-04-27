@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Public } from '../../common/decorators/public.decorator';
@@ -17,7 +17,7 @@ export class GalleryController {
   @Post()
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.OWNER)
+  @Roles(Role.SALON_ADMIN)
   add(@Body() dto: CreateGalleryItemDto, @CurrentUser() user: JwtPayloadUser) {
     return this.galleryService.addItem(dto, user.sub, user.role as Role);
   }
@@ -26,5 +26,13 @@ export class GalleryController {
   @Get('salon/:salonId')
   list(@Param('salonId') salonId: string) {
     return this.galleryService.listForSalon(salonId);
+  }
+
+  @Delete(':id')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SALON_ADMIN)
+  remove(@Param('id') id: string, @CurrentUser() user: JwtPayloadUser) {
+    return this.galleryService.remove(id, user.sub, user.role as Role);
   }
 }

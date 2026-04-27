@@ -48,11 +48,12 @@ export class NotificationProcessor extends WorkerHost {
       this.logger.warn(`Booking ${data.bookingId} not found for notification`);
       return;
     }
-    await this.dispatcher.dispatchBookingConfirmation(
-      booking.customer.email,
-      booking.salon.name,
-      booking.startAt,
-    );
+    const email = booking.customer?.email ?? booking.guestEmail;
+    if (!email) {
+      this.logger.warn(`Booking ${data.bookingId} has no recipient email`);
+      return;
+    }
+    await this.dispatcher.dispatchBookingConfirmation(email, booking.salon.name, booking.startAt);
   }
 
   private async handleBookingStatusUpdated(data: BookingNotificationPayload): Promise<void> {
@@ -67,11 +68,12 @@ export class NotificationProcessor extends WorkerHost {
       this.logger.warn(`Booking ${data.bookingId} not found for notification`);
       return;
     }
-    await this.dispatcher.dispatchBookingStatusUpdate(
-      booking.customer.email,
-      booking.salon.name,
-      booking.status,
-    );
+    const email = booking.customer?.email ?? booking.guestEmail;
+    if (!email) {
+      this.logger.warn(`Booking ${data.bookingId} has no recipient email`);
+      return;
+    }
+    await this.dispatcher.dispatchBookingStatusUpdate(email, booking.salon.name, booking.status);
   }
 
   private async handleSubscriptionExpiring(data: SubscriptionReminderPayload): Promise<void> {

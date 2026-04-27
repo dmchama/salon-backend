@@ -8,9 +8,8 @@ datasource db {
 }
 
 enum Role {
-  ADMIN
-  OWNER
-  CUSTOMER
+  SUPER_ADMIN // platform / website administrator
+  SALON_ADMIN // manages their own salon(s)
 }
 
 enum SalonStatus {
@@ -89,22 +88,27 @@ model OwnerSubscription {
 }
 
 model Salon {
-  id          String      @id @default(uuid())
-  ownerId     String      @map("owner_id")
-  name        String
-  slug        String      @unique
-  description String?     @db.Text
-  address     String?
-  city        String?
-  country     String?
-  status      SalonStatus @default(DRAFT)
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
+  id             String      @id @default(uuid())
+  ownerId        String      @map("owner_id")
+  name           String
+  slug           String      @unique
+  description    String?     @db.Text
+  address        String?
+  city           String?
+  country        String?
+  contactPhone   String?     @map("contact_phone")
+  contactEmail   String?     @map("contact_email")
+  websiteUrl     String?     @map("website_url")
+  businessHours  Json?       @map("business_hours")
+  status         SalonStatus @default(DRAFT)
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
 
-  owner    User          @relation("SalonOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  services Service[]
-  bookings Booking[]
-  gallery  GalleryItem[]
+  owner       User          @relation("SalonOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  services    Service[]
+  bookings    Booking[]
+  gallery     GalleryItem[]
+  technicians Technician[]
 
   @@index([name])
   @@index([city])
@@ -133,23 +137,29 @@ model Service {
 }
 
 model Booking {
-  id         String        @id @default(uuid())
-  customerId String        @map("customer_id")
-  salonId    String        @map("salon_id")
-  serviceId  String        @map("service_id")
-  startAt    DateTime      @map("start_at")
-  endAt      DateTime      @map("end_at")
-  status     BookingStatus @default(PENDING)
-  notes      String?       @db.Text
-  createdAt  DateTime      @default(now()) @map("created_at")
-  updatedAt  DateTime      @updatedAt @map("updated_at")
+  id          String        @id @default(uuid())
+  customerId  String?       @map("customer_id")
+  guestName   String?       @map("guest_name")
+  guestEmail  String?       @map("guest_email")
+  guestPhone  String?       @map("guest_phone")
+  salonId       String        @map("salon_id")
+  serviceId     String        @map("service_id")
+  technicianId  String?       @map("technician_id")
+  startAt       DateTime      @map("start_at")
+  endAt         DateTime      @map("end_at")
+  status        BookingStatus @default(PENDING)
+  notes         String?       @db.Text
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
 
-  customer User    @relation("CustomerBookings", fields: [customerId], references: [id])
-  salon    Salon   @relation(fields: [salonId], references: [id])
-  service  Service @relation(fields: [serviceId], references: [id])
+  customer   User?       @relation("CustomerBookings", fields: [customerId], references: [id])
+  salon      Salon       @relation(fields: [salonId], references: [id])
+  service    Service     @relation(fields: [serviceId], references: [id])
+  technician Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
 
   @@index([customerId])
   @@index([salonId])
+  @@index([technicianId])
   @@index([startAt])
   @@index([status])
   @@index([salonId, startAt])
@@ -159,8 +169,8 @@ model Booking {
 model GalleryItem {
   id        String   @id @default(uuid())
   salonId   String   @map("salon_id")
-  url       String
-  caption   String?
+  url       String   @db.Text
+  caption   String?  @db.Text
   sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -168,4 +178,23 @@ model GalleryItem {
 
   @@index([salonId])
   @@map("gallery_items")
+}
+
+model Technician {
+  id             String   @id @default(uuid())
+  salonId        String   @map("salon_id")
+  name           String
+  phone          String?
+  email          String?
+  specialization String?  @db.Text
+  active         Boolean  @default(true)
+  sortOrder      Int      @default(0) @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  salon    Salon     @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([salonId])
+  @@map("technicians")
 }

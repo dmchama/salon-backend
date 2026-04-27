@@ -13,7 +13,7 @@ export class SubscriptionPlansService {
   }
 
   create(dto: CreatePlanDto, role: Role) {
-    if (role !== Role.ADMIN) {
+    if (role !== Role.SUPER_ADMIN) {
       throw new DomainException('FORBIDDEN', 'Admin only', 403);
     }
     return this.subscriptionPlansRepository.create({

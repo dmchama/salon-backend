@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDate, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsDate, IsEmail, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 export class CreateBookingDto {
   @ApiProperty()
@@ -16,8 +16,31 @@ export class CreateBookingDto {
   @IsDate()
   startAt!: Date;
 
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  guestName!: string;
+
+  @ApiProperty()
+  @IsEmail()
+  @MaxLength(255)
+  guestEmail!: string;
+
+  @ApiProperty()
+  @IsString()
+  @MinLength(5)
+  @MaxLength(40)
+  guestPhone!: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   notes?: string;
+
+  @ApiPropertyOptional({ description: 'Optional preferred staff member (must belong to this salon)' })
+  @IsOptional()
+  @IsUUID()
+  technicianId?: string;
 }

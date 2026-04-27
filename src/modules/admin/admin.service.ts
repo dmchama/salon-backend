@@ -8,7 +8,7 @@ export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
 
   async stats(role: Role) {
-    if (role !== Role.ADMIN) {
+    if (role !== Role.SUPER_ADMIN) {
       throw new DomainException('FORBIDDEN', 'Admin only', 403);
     }
     const [users, salons, bookings, plans] = await Promise.all([

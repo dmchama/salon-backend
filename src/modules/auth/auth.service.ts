@@ -17,31 +17,17 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    if (dto.role === Role.ADMIN) {
-      throw new DomainException('FORBIDDEN_ROLE', 'Cannot register as admin', 403);
+    if (dto.role === Role.SUPER_ADMIN) {
+      throw new DomainException('FORBIDDEN_ROLE', 'Cannot self-register as super admin', 403);
     }
-    if (dto.role === Role.OWNER) {
-      return this.registerOwnerWithPlan(dto);
+    if (dto.role === Role.SALON_ADMIN) {
+      return this.registerSalonAdminWithPlan(dto);
     }
-    const existing = await this.usersRepository.findByEmail(dto.email);
-    if (existing) {
-      throw new DomainException('EMAIL_IN_USE', 'Email already registered', 409);
-    }
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-    const user = await this.usersRepository.create({
-      email: dto.email,
-      passwordHash,
-      role: dto.role,
-      firstName: dto.firstName,
-      lastName: dto.lastName,
-    });
-    const token = await this.signToken(user.id, user.email, user.role);
-    const { passwordHash: _, ...safe } = user;
-    return { user: safe, accessToken: token };
+    throw new DomainException('INVALID_ROLE', 'Invalid registration', 400);
   }
 
-  /** Creates OWNER user + active OwnerSubscription in one transaction. */
-  private async registerOwnerWithPlan(dto: RegisterDto) {
+  /** Creates SALON_ADMIN user + active OwnerSubscription in one transaction. */
+  private async registerSalonAdminWithPlan(dto: RegisterDto) {
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.user.findUnique({ where: { email: dto.email } });
@@ -58,7 +44,7 @@ export class AuthService {
         data: {
           email: dto.email,
           passwordHash,
-          role: Role.OWNER,
+          role: Role.SALON_ADMIN,
           firstName: dto.firstName,
           lastName: dto.lastName,
         },

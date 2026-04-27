@@ -9,7 +9,7 @@ export class OwnerSubscriptionsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async subscribe(dto: CreateOwnerSubscriptionDto, ownerId: string, role: Role) {
-    if (role !== Role.OWNER) {
+    if (role !== Role.SALON_ADMIN) {
       throw new DomainException('FORBIDDEN', 'Owner only', 403);
     }
     const plan = await this.prisma.subscriptionPlan.findFirst({
@@ -35,7 +35,7 @@ export class OwnerSubscriptionsService {
   }
 
   listMine(ownerId: string, role: Role) {
-    if (role !== Role.OWNER) {
+    if (role !== Role.SALON_ADMIN) {
       throw new DomainException('FORBIDDEN', 'Owner only', 403);
     }
     return this.prisma.ownerSubscription.findMany({

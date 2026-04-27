@@ -4,7 +4,7 @@ import * as request from 'supertest';
 import { randomUUID } from 'crypto';
 import { AppModule } from '../src/app.module';
 
-describe('Auth register OWNER (e2e)', () => {
+describe('Auth register SALON_ADMIN (e2e)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -32,7 +32,7 @@ describe('Auth register OWNER (e2e)', () => {
     await app.close();
   });
 
-  it('accepts non-UUID subscriptionPlanId (e.g. seed id) for OWNER register', async () => {
+  it('accepts non-UUID subscriptionPlanId (e.g. seed id) for SALON_ADMIN register', async () => {
     const plansRes = await request(app.getHttpServer()).get('/api/v1/subscription-plans').expect(200);
     const plans = plansRes.body as Array<{ id: string; active: boolean }>;
     const seedPlan = plans.find((p) => p.id === 'seed-plan-basic');
@@ -44,7 +44,7 @@ describe('Auth register OWNER (e2e)', () => {
       .send({
         email,
         password: 'TestOwner123!',
-        role: 'OWNER',
+        role: 'SALON_ADMIN',
         firstName: 'E2E',
         lastName: 'Owner',
         subscriptionPlanId: 'seed-plan-basic',
@@ -53,6 +53,6 @@ describe('Auth register OWNER (e2e)', () => {
 
     expect(registerRes.body.accessToken).toBeDefined();
     expect(registerRes.body.user.email).toBe(email);
-    expect(registerRes.body.user.role).toBe('OWNER');
+    expect(registerRes.body.user.role).toBe('SALON_ADMIN');
   });
 });

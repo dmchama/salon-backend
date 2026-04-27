@@ -11,7 +11,7 @@ import { AdminService } from './admin.service';
 @ApiBearerAuth('access-token')
 @Controller({ path: 'admin', version: '1' })
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@Roles(Role.SUPER_ADMIN)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 

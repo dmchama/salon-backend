@@ -15,11 +15,8 @@ export class BookingsService {
     private readonly notifications: NotificationProducerService,
   ) {}
 
-  async create(dto: CreateBookingDto, customerId: string, customerRole: Role) {
-    if (customerRole !== Role.CUSTOMER) {
-      throw new DomainException('FORBIDDEN', 'Only customers can create bookings', 403);
-    }
-
+  /** Public guest booking (no account). */
+  async create(dto: CreateBookingDto) {
     const salon = await this.prisma.salon.findFirst({
       where: { id: dto.salonId, status: 'PUBLISHED' },
     });
@@ -47,15 +44,35 @@ export class BookingsService {
       throw new DomainException('SLOT_TAKEN', 'Selected time slot is not available', 409);
     }
 
-    const booking = await this.bookingsRepository.create({
-      customer: { connect: { id: customerId } },
+    let technicianConnect: { connect: { id: string } } | undefined;
+    if (dto.technicianId) {
+      const tech = await this.prisma.technician.findFirst({
+        where: { id: dto.technicianId, salonId: dto.salonId, active: true },
+      });
+      if (!tech) {
+        throw new DomainException('TECHNICIAN_NOT_FOUND', 'Technician not available for this salon', 404);
+      }
+      technicianConnect = { connect: { id: tech.id } };
+    }
+
+    const created = await this.bookingsRepository.create({
       salon: { connect: { id: dto.salonId } },
       service: { connect: { id: dto.serviceId } },
+      ...(technicianConnect ? { technician: technicianConnect } : {}),
       startAt,
       endAt,
       status: BookingStatus.PENDING,
-      notes: dto.notes,
+      guestName: dto.guestName.trim(),
+      guestEmail: dto.guestEmail.trim().toLowerCase(),
+      guestPhone: dto.guestPhone.trim(),
+      notes: dto.notes?.trim() || null,
     });
+
+    const booking =
+      (await this.prisma.booking.findUnique({
+        where: { id: created.id },
+        include: { technician: true },
+      })) ?? created;
 
     await this.notifications.enqueueBookingCreated({
       bookingId: booking.id,
@@ -63,13 +80,6 @@ export class BookingsService {
     });
 
     return booking;
-  }
-
-  async listMine(customerId: string, role: Role) {
-    if (role !== Role.CUSTOMER) {
-      throw new DomainException('FORBIDDEN', 'Only customers can list own bookings', 403);
-    }
-    return this.bookingsRepository.listForCustomer(customerId);
   }
 
   async updateStatus(
@@ -83,15 +93,11 @@ export class BookingsService {
       throw new DomainException('NOT_FOUND', 'Booking not found', 404);
     }
 
-    if (actorRole === Role.ADMIN) {
+    if (actorRole === Role.SUPER_ADMIN) {
       // full access
-    } else if (actorRole === Role.OWNER) {
+    } else if (actorRole === Role.SALON_ADMIN) {
       if (booking.salon.ownerId !== actorId) {
         throw new DomainException('FORBIDDEN', 'Not your salon booking', 403);
-      }
-    } else if (actorRole === Role.CUSTOMER) {
-      if (booking.customerId !== actorId) {
-        throw new DomainException('FORBIDDEN', 'Not your booking', 403);
       }
     } else {
       throw new DomainException('FORBIDDEN', 'Cannot update booking', 403);
@@ -113,5 +119,51 @@ export class BookingsService {
     });
 
     return updated;
+  }
+
+  async listForSalon(salonId: string, actorId: string, actorRole: Role) {
+    const salon = await this.prisma.salon.findFirst({ where: { id: salonId } });
+    if (!salon) {
+      throw new DomainException('NOT_FOUND', 'Salon not found', 404);
+    }
+    if (actorRole === Role.SALON_ADMIN && salon.ownerId !== actorId) {
+      throw new DomainException('FORBIDDEN', 'Not your salon', 403);
+    }
+    if (actorRole !== Role.SALON_ADMIN && actorRole !== Role.SUPER_ADMIN) {
+      throw new DomainException('FORBIDDEN', 'Cannot list bookings', 403);
+    }
+    return this.bookingsRepository.listForSalon(salonId);
+  }
+
+  async reschedule(bookingId: string, startAtIso: string, actorId: string, actorRole: Role) {
+    const booking = await this.bookingsRepository.findByIdWithRelations(bookingId);
+    if (!booking) {
+      throw new DomainException('NOT_FOUND', 'Booking not found', 404);
+    }
+    if (actorRole === Role.SALON_ADMIN && booking.salon.ownerId !== actorId) {
+      throw new DomainException('FORBIDDEN', 'Not your salon booking', 403);
+    }
+    if (actorRole !== Role.SALON_ADMIN && actorRole !== Role.SUPER_ADMIN) {
+      throw new DomainException('FORBIDDEN', 'Cannot reschedule', 403);
+    }
+    if (booking.status === BookingStatus.CANCELLED || booking.status === BookingStatus.COMPLETED) {
+      throw new DomainException('INVALID_STATUS', 'Cannot reschedule this booking', 400);
+    }
+
+    const startAt = new Date(startAtIso);
+    const endAt = new Date(startAt.getTime() + booking.service.durationMin * 60 * 1000);
+    assertValidBookingWindow(startAt, endAt);
+
+    const overlap = await this.bookingsRepository.hasOverlappingBooking(
+      booking.salonId,
+      startAt,
+      endAt,
+      bookingId,
+    );
+    if (overlap) {
+      throw new DomainException('SLOT_TAKEN', 'Selected time slot is not available', 409);
+    }
+
+    return this.bookingsRepository.updateSchedule(bookingId, startAt, endAt);
   }
 }

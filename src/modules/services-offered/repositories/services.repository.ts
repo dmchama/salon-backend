@@ -16,4 +16,15 @@ export class ServicesRepository {
       orderBy: { sortOrder: 'asc' },
     });
   }
+
+  listAllForSalon(salonId: string) {
+    return this.prisma.service.findMany({
+      where: { salonId },
+      orderBy: { sortOrder: 'asc' },
+    });
+  }
+
+  update(id: string, data: Prisma.ServiceUpdateInput): Promise<Service> {
+    return this.prisma.service.update({ where: { id }, data });
+  }
 }

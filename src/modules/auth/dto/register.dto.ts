@@ -11,6 +11,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 
+/** Self-service registration is only for salon admins (business accounts). Super admins are created manually or via seed. */
 export class RegisterDto {
   @ApiProperty({ example: 'owner@salon.com' })
   @IsEmail()
@@ -21,8 +22,8 @@ export class RegisterDto {
   @MinLength(8)
   password!: string;
 
-  @ApiProperty({ enum: [Role.CUSTOMER, Role.OWNER] })
-  @IsIn([Role.CUSTOMER, Role.OWNER])
+  @ApiProperty({ enum: [Role.SALON_ADMIN] })
+  @IsIn([Role.SALON_ADMIN])
   role!: Role;
 
   @ApiPropertyOptional()
@@ -35,9 +36,9 @@ export class RegisterDto {
   @IsString()
   lastName?: string;
 
-  /** Required when role is OWNER — links the initial subscription after signup (plan primary key, may be UUID or custom id e.g. from seed). */
-  @ApiPropertyOptional({ description: 'Subscription plan id (required for OWNER)' })
-  @ValidateIf((o) => o.role === Role.OWNER)
+  /** Required when registering as SALON_ADMIN — subscription plan id from seed or admin-created plans. */
+  @ApiPropertyOptional({ description: 'Subscription plan id (required for SALON_ADMIN)' })
+  @ValidateIf((o) => o.role === Role.SALON_ADMIN)
   @IsNotEmpty()
   @IsString()
   @MaxLength(128)

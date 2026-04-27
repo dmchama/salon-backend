@@ -12,7 +12,7 @@ async function main() {
     create: {
       email: 'admin@example.com',
       passwordHash,
-      role: Role.ADMIN,
+      role: Role.SUPER_ADMIN,
       firstName: 'System',
       lastName: 'Admin',
     },

@@ -1,14 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsUUID, IsUrl, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MinLength, IsUUID } from 'class-validator';
 
 export class CreateGalleryItemDto {
   @ApiProperty()
   @IsUUID()
   salonId!: string;
 
-  @ApiProperty({ description: 'Public URL of the image' })
-  @IsUrl()
-  @MaxLength(2048)
+  @ApiProperty({ description: 'Image location (URL or path handled by your hosting)' })
+  @IsString()
+  @MinLength(1)
   url!: string;
 
   @ApiPropertyOptional()

@@ -11,7 +11,7 @@ import { SalonOwnersService } from './salon-owners.service';
 @ApiBearerAuth('access-token')
 @Controller({ path: 'salon-owners', version: '1' })
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.OWNER)
+@Roles(Role.SALON_ADMIN)
 export class SalonOwnersController {
   constructor(private readonly salonOwnersService: SalonOwnersService) {}
 
