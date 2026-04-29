@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsArray, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 
 export class CreatePlanDto {
   @ApiProperty()
@@ -13,11 +13,16 @@ export class CreatePlanDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({ description: 'Price in cents' })
+  @ApiProperty({ description: 'Price in cents (e.g. 499900 = LKR 4,999)' })
   @Type(() => Number)
   @IsInt()
   @Min(0)
   priceCents!: number;
+
+  @ApiPropertyOptional({ default: 'LKR' })
+  @IsOptional()
+  @IsString()
+  currency?: string;
 
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()
@@ -25,4 +30,10 @@ export class CreatePlanDto {
   @IsInt()
   @Min(1)
   intervalMonths?: number;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  features?: string[];
 }

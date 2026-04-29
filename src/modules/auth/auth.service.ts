@@ -45,6 +45,7 @@ export class AuthService {
           email: dto.email,
           passwordHash,
           role: Role.SALON_ADMIN,
+          accountStatus: 'PENDING',
           firstName: dto.firstName,
           lastName: dto.lastName,
         },
@@ -76,6 +77,9 @@ export class AuthService {
     const ok = await bcrypt.compare(dto.password, user.passwordHash);
     if (!ok) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+    if (user.accountStatus === 'SUSPENDED') {
+      throw new DomainException('ACCOUNT_SUSPENDED', 'Your account has been suspended. Contact support.', 403);
     }
     const token = await this.signToken(user.id, user.email, user.role);
     const { passwordHash: _, ...safe } = user;

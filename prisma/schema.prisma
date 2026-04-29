@@ -12,6 +12,12 @@ enum Role {
   SALON_ADMIN // manages their own salon(s)
 }
 
+enum AccountStatus {
+  PENDING   // awaiting admin approval
+  ACTIVE    // approved and in good standing
+  SUSPENDED // blocked by admin
+}
+
 enum SalonStatus {
   DRAFT
   PUBLISHED
@@ -37,7 +43,8 @@ model User {
   id           String   @id @default(uuid())
   email        String   @unique
   passwordHash String   @map("password_hash")
-  role         Role
+  role          Role
+  accountStatus AccountStatus @default(PENDING) @map("account_status")
   firstName    String?  @map("first_name")
   lastName     String?  @map("last_name")
   phone        String?
