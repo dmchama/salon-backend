@@ -187,6 +187,14 @@ model GalleryItem {
   @@map("gallery_items")
 }
 
+model WebsiteSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("website_settings")
+}
+
 model Technician {
   id             String   @id @default(uuid())
   salonId        String   @map("salon_id")

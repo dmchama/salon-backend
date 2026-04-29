@@ -1,7 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+
+type HeroSlide = {
+  id: string;
+  mediaType: 'image' | 'video';
+  mediaUrl: string;
+  title: string;
+  subtitle: string;
+  buttonText: string;
+};
 
 @Injectable()
 export class AdminService {
@@ -172,6 +181,71 @@ export class AdminService {
       };
     });
   }
+
+  // ── Website Settings ─────────────────────────────────────────────────────
+
+  async getWebsiteSettings() {
+    const rows = await this.prisma.websiteSetting.findMany();
+    const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    return {
+      heroSlides: Array.isArray(map.heroSlides) ? (map.heroSlides as HeroSlide[]) : [],
+      footerText:
+        typeof map.footerText === 'string'
+          ? map.footerText
+          : '© 2026 GlamBook. All rights reserved.',
+      supportEmail:
+        typeof map.supportEmail === 'string' ? map.supportEmail : 'support@glambook.com',
+      metaTitle:
+        typeof map.metaTitle === 'string' ? map.metaTitle : 'GlamBook - Luxury Salon Booking',
+      metaDescription:
+        typeof map.metaDescription === 'string'
+          ? map.metaDescription
+          : 'Book premium salon services instantly.',
+    };
+  }
+
+  async saveHeroSlides(slides: HeroSlide[]) {
+    await this.prisma.websiteSetting.upsert({
+      where: { key: 'heroSlides' },
+      update: { value: slides as unknown as Prisma.InputJsonValue },
+      create: { key: 'heroSlides', value: slides as unknown as Prisma.InputJsonValue },
+    });
+    return { message: 'Hero slides saved' };
+  }
+
+  async saveFooter(data: { footerText: string; supportEmail: string }) {
+    await Promise.all([
+      this.prisma.websiteSetting.upsert({
+        where: { key: 'footerText' },
+        update: { value: data.footerText },
+        create: { key: 'footerText', value: data.footerText },
+      }),
+      this.prisma.websiteSetting.upsert({
+        where: { key: 'supportEmail' },
+        update: { value: data.supportEmail },
+        create: { key: 'supportEmail', value: data.supportEmail },
+      }),
+    ]);
+    return { message: 'Footer settings saved' };
+  }
+
+  async saveSeo(data: { metaTitle: string; metaDescription: string }) {
+    await Promise.all([
+      this.prisma.websiteSetting.upsert({
+        where: { key: 'metaTitle' },
+        update: { value: data.metaTitle },
+        create: { key: 'metaTitle', value: data.metaTitle },
+      }),
+      this.prisma.websiteSetting.upsert({
+        where: { key: 'metaDescription' },
+        update: { value: data.metaDescription },
+        create: { key: 'metaDescription', value: data.metaDescription },
+      }),
+    ]);
+    return { message: 'SEO settings saved' };
+  }
+
+  // ── Salon Moderation ─────────────────────────────────────────────────────
 
   async listSalons() {
     const salons = await this.prisma.salon.findMany({
