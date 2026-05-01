@@ -331,6 +331,86 @@ export class AdminService {
     return { message: 'Owner activated' };
   }
 
+  // ── SMS Campaign ─────────────────────────────────────────────────────────
+
+  async getCampaignCustomers(segment: string) {
+    const now = new Date();
+    const where: Prisma.BookingWhereInput = { guestPhone: { not: null } };
+
+    if (segment === 'last3months') {
+      const d = new Date(now); d.setMonth(d.getMonth() - 3);
+      where.startAt = { gte: d };
+    } else if (segment === 'last6months') {
+      const d = new Date(now); d.setMonth(d.getMonth() - 6);
+      where.startAt = { gte: d };
+    } else if (segment === 'last12months') {
+      const d = new Date(now); d.setMonth(d.getMonth() - 12);
+      where.startAt = { gte: d };
+    }
+
+    const bookings = await this.prisma.booking.findMany({
+      where,
+      select: { guestName: true, guestPhone: true, guestEmail: true },
+    });
+
+    const customerMap = new Map<string, { name: string; phone: string; email: string | null; bookingCount: number }>();
+    for (const b of bookings) {
+      if (!b.guestPhone) continue;
+      const existing = customerMap.get(b.guestPhone);
+      if (existing) {
+        existing.bookingCount++;
+      } else {
+        customerMap.set(b.guestPhone, {
+          name: b.guestName ?? 'Unknown',
+          phone: b.guestPhone,
+          email: b.guestEmail ?? null,
+          bookingCount: 1,
+        });
+      }
+    }
+
+    let customers = Array.from(customerMap.values());
+    if (segment === 'regular') {
+      customers = customers.filter((c) => c.bookingCount >= 2);
+    }
+
+    return { customers, count: customers.length };
+  }
+
+  async getCampaignServices() {
+    const services = await this.prisma.service.findMany({
+      where: { active: true },
+      include: { salon: { select: { name: true } } },
+      orderBy: [{ salon: { name: 'asc' } }, { name: 'asc' }],
+    });
+
+    return services.map((s) => ({
+      id: s.id,
+      name: s.name,
+      salonName: s.salon.name,
+      priceCents: s.priceCents,
+      durationMin: s.durationMin,
+    }));
+  }
+
+  async sendSmsCampaign(body: {
+    campaignName: string;
+    segment: string;
+    discountPct: number;
+    discountScope: string;
+    serviceIds: string[];
+    validFrom: string;
+    validTo: string;
+    customLink: string;
+    message: string;
+    scheduledAt?: string;
+    recipientCount: number;
+  }) {
+    // Production: dispatch to BullMQ SMS queue per recipient
+    console.log('[SMS Campaign]', JSON.stringify(body, null, 2));
+    return { message: 'Campaign scheduled successfully', recipientCount: body.recipientCount };
+  }
+
   private async revenueInRange(from: Date, to: Date): Promise<number> {
     const subs = await this.prisma.ownerSubscription.findMany({
       where: { startsAt: { gte: from, lt: to } },

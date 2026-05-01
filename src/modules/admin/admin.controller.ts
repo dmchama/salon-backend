@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { CurrentUser, JwtPayloadUser } from '../../common/decorators/current-user.decorator';
@@ -91,5 +91,20 @@ export class AdminController {
   @Patch('owners/:id/activate')
   activateOwner(@Param('id') id: string) {
     return this.adminService.activateOwner(id);
+  }
+
+  @Get('campaign/customers')
+  getCampaignCustomers(@Query('segment') segment: string) {
+    return this.adminService.getCampaignCustomers(segment ?? 'all');
+  }
+
+  @Get('campaign/services')
+  getCampaignServices() {
+    return this.adminService.getCampaignServices();
+  }
+
+  @Post('campaign/sms')
+  sendSmsCampaign(@Body() body: any) {
+    return this.adminService.sendSmsCampaign(body);
   }
 }
