@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { PromoCodesService } from '../promo-codes/promo-codes.service';
 
 type HeroSlide = {
   id: string;
@@ -14,7 +15,10 @@ type HeroSlide = {
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly promoCodes: PromoCodesService,
+  ) {}
 
   async stats(role: Role) {
     if (role !== Role.SUPER_ADMIN) {
@@ -406,9 +410,103 @@ export class AdminService {
     scheduledAt?: string;
     recipientCount: number;
   }) {
-    // Production: dispatch to BullMQ SMS queue per recipient
     console.log('[SMS Campaign]', JSON.stringify(body, null, 2));
     return { message: 'Campaign scheduled successfully', recipientCount: body.recipientCount };
+  }
+
+  // ── SMS Campaign Price & Requests ─────────────────────────────────────────
+
+  async getSmsCampaignPrice(): Promise<{ priceCents: number }> {
+    const row = await this.prisma.websiteSetting.findUnique({ where: { key: 'smsCampaignPriceCents' } });
+    const priceCents = row ? Number(row.value) : 0;
+    return { priceCents };
+  }
+
+  async setSmsCampaignPrice(priceCents: number): Promise<{ priceCents: number }> {
+    await this.prisma.websiteSetting.upsert({
+      where: { key: 'smsCampaignPriceCents' },
+      update: { value: priceCents },
+      create: { key: 'smsCampaignPriceCents', value: priceCents },
+    });
+    return { priceCents };
+  }
+
+  async listCampaignRequests() {
+    const requests = await this.prisma.smsCampaignRequest.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        owner: { select: { id: true, firstName: true, lastName: true, email: true } },
+        salon: { select: { id: true, name: true, slug: true } },
+        promoCode: { select: { code: true, usageCount: true, active: true } },
+      },
+    });
+
+    return requests.map((r) => ({
+      id: r.id,
+      campaignName: r.campaignName,
+      segment: r.segment,
+      discountPct: r.discountPct,
+      discountScope: r.discountScope,
+      serviceIds: r.serviceIds,
+      validFrom: r.validFrom,
+      validTo: r.validTo,
+      message: r.message,
+      recipientCount: r.recipientCount,
+      receiptUrl: r.receiptUrl,
+      priceCents: r.priceCents,
+      status: r.status,
+      adminNote: r.adminNote,
+      createdAt: r.createdAt,
+      owner: {
+        id: r.owner.id,
+        displayName: [r.owner.firstName, r.owner.lastName].filter(Boolean).join(' ') || r.owner.email,
+        email: r.owner.email,
+      },
+      salon: { id: r.salon.id, name: r.salon.name, slug: r.salon.slug },
+      promoCode: r.promoCode,
+    }));
+  }
+
+  async approveCampaignRequest(id: string) {
+    const req = await this.prisma.smsCampaignRequest.findUnique({ where: { id } });
+    if (!req) throw new DomainException('NOT_FOUND', 'Campaign request not found', 404);
+    if (req.status !== 'PENDING') {
+      throw new DomainException('INVALID_STATE', 'Only pending requests can be approved', 400);
+    }
+
+    const promo = await this.promoCodes.create({
+      salonId: req.salonId,
+      campaignName: req.campaignName,
+      recipientCount: req.recipientCount,
+      discountPct: req.discountPct,
+      discountScope: req.discountScope,
+      serviceIds: (req.serviceIds as string[]) ?? [],
+      validFrom: req.validFrom?.toISOString(),
+      validTo: req.validTo?.toISOString(),
+    });
+
+    await this.prisma.smsCampaignRequest.update({
+      where: { id },
+      data: { status: 'APPROVED', promoCodeId: promo.id },
+    });
+
+    const salon = await this.prisma.salon.findUnique({ where: { id: req.salonId } });
+    return { message: 'Campaign approved', promoCode: promo.code, salonSlug: salon?.slug ?? '' };
+  }
+
+  async rejectCampaignRequest(id: string, note: string) {
+    const req = await this.prisma.smsCampaignRequest.findUnique({ where: { id } });
+    if (!req) throw new DomainException('NOT_FOUND', 'Campaign request not found', 404);
+    if (req.status !== 'PENDING') {
+      throw new DomainException('INVALID_STATE', 'Only pending requests can be rejected', 400);
+    }
+
+    await this.prisma.smsCampaignRequest.update({
+      where: { id },
+      data: { status: 'REJECTED', adminNote: note || null },
+    });
+
+    return { message: 'Campaign rejected' };
   }
 
   private async revenueInRange(from: Date, to: Date): Promise<number> {

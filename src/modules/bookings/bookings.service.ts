@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { BookingStatus, Role } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { NotificationProducerService } from '../notifications/notification-producer.service';
+import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { assertValidBookingWindow, canTransitionStatus } from './domain/booking.policy';
 import { BookingsRepository } from './repositories/bookings.repository';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -13,6 +14,7 @@ export class BookingsService {
     private readonly prisma: PrismaService,
     private readonly bookingsRepository: BookingsRepository,
     private readonly notifications: NotificationProducerService,
+    private readonly promoCodes: PromoCodesService,
   ) {}
 
   /** Public guest booking (no account). */
@@ -55,10 +57,17 @@ export class BookingsService {
       technicianConnect = { connect: { id: tech.id } };
     }
 
+    let appliedPromo: { id: string; discountPct: number } | undefined;
+    if (dto.promoCode) {
+      const promo = await this.promoCodes.validate(dto.promoCode, dto.salonId, dto.serviceId);
+      appliedPromo = { id: promo.id, discountPct: promo.discountPct };
+    }
+
     const created = await this.bookingsRepository.create({
       salon: { connect: { id: dto.salonId } },
       service: { connect: { id: dto.serviceId } },
       ...(technicianConnect ? { technician: technicianConnect } : {}),
+      ...(appliedPromo ? { promoCode: { connect: { id: appliedPromo.id } }, discountPct: appliedPromo.discountPct } : {}),
       startAt,
       endAt,
       status: BookingStatus.PENDING,
@@ -67,6 +76,10 @@ export class BookingsService {
       guestPhone: dto.guestPhone.trim(),
       notes: dto.notes?.trim() || null,
     });
+
+    if (appliedPromo) {
+      await this.promoCodes.incrementUsage(appliedPromo.id);
+    }
 
     const booking =
       (await this.prisma.booking.findUnique({

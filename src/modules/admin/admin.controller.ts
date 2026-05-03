@@ -107,4 +107,29 @@ export class AdminController {
   sendSmsCampaign(@Body() body: any) {
     return this.adminService.sendSmsCampaign(body);
   }
+
+  @Get('sms-price')
+  getSmsCampaignPrice() {
+    return this.adminService.getSmsCampaignPrice();
+  }
+
+  @Patch('sms-price')
+  setSmsCampaignPrice(@Body() body: { priceCents: number }) {
+    return this.adminService.setSmsCampaignPrice(body.priceCents);
+  }
+
+  @Get('campaign-requests')
+  listCampaignRequests() {
+    return this.adminService.listCampaignRequests();
+  }
+
+  @Patch('campaign-requests/:id/approve')
+  approveCampaignRequest(@Param('id') id: string) {
+    return this.adminService.approveCampaignRequest(id);
+  }
+
+  @Patch('campaign-requests/:id/reject')
+  rejectCampaignRequest(@Param('id') id: string, @Body() body: { note?: string }) {
+    return this.adminService.rejectCampaignRequest(id, body.note ?? '');
+  }
 }

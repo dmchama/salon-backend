@@ -23,6 +23,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AdminModule } from './modules/admin/admin.module';
 import { SearchModule } from './modules/search/search.module';
 import { TechniciansModule } from './modules/technicians/technicians.module';
+import { PromoCodesModule } from './modules/promo-codes/promo-codes.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -72,6 +73,7 @@ import { HealthController } from './health/health.controller';
     AdminModule,
     SearchModule,
     TechniciansModule,
+    PromoCodesModule,
   ],
   controllers: [HealthController],
   providers: [

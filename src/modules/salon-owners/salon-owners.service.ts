@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { BookingStatus, Role } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { PromoCodesService } from '../promo-codes/promo-codes.service';
 
 function startOfUtcDay(d: Date): Date {
   const x = new Date(d);
@@ -21,7 +22,10 @@ function formatUtcDay(d: Date): string {
 
 @Injectable()
 export class SalonOwnersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly promoCodes: PromoCodesService,
+  ) {}
 
   async dashboard(ownerId: string, role: Role) {
     if (role !== Role.SALON_ADMIN) {
@@ -125,16 +129,102 @@ export class SalonOwnersService {
     }));
   }
 
+  async getSmsCampaignPrice(): Promise<{ priceCents: number }> {
+    const row = await this.prisma.websiteSetting.findUnique({ where: { key: 'smsCampaignPriceCents' } });
+    return { priceCents: row ? Number(row.value) : 0 };
+  }
+
+  async submitCampaignRequest(ownerId: string, body: {
+    salonId: string; campaignName: string; segment: string;
+    discountPct: number; discountScope: string; serviceIds: string[];
+    validFrom?: string; validTo?: string;
+    message: string; scheduledAt?: string; recipientCount: number;
+  }, receiptUrl?: string) {
+    const salon = await this.prisma.salon.findFirst({ where: { id: body.salonId, ownerId } });
+    if (!salon) throw new DomainException('NOT_FOUND', 'Salon not found', 404);
+
+    const priceRow = await this.prisma.websiteSetting.findUnique({ where: { key: 'smsCampaignPriceCents' } });
+    const perSmsPriceCents = priceRow ? Number(priceRow.value) : 0;
+    const totalPriceCents = perSmsPriceCents * (body.recipientCount || 0);
+
+    const request = await this.prisma.smsCampaignRequest.create({
+      data: {
+        ownerId,
+        salonId: body.salonId,
+        campaignName: body.campaignName,
+        segment: body.segment,
+        discountPct: body.discountPct,
+        discountScope: body.discountScope,
+        serviceIds: body.serviceIds?.length ? body.serviceIds : undefined,
+        validFrom: body.validFrom ? new Date(body.validFrom) : undefined,
+        validTo: body.validTo ? new Date(body.validTo) : undefined,
+        message: body.message,
+        scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined,
+        recipientCount: body.recipientCount,
+        receiptUrl: receiptUrl ?? null,
+        priceCents: totalPriceCents,
+      },
+    });
+
+    return { message: 'Campaign request submitted', requestId: request.id };
+  }
+
   async sendOwnerSmsCampaign(ownerId: string, body: {
     salonId: string; campaignName: string; segment: string;
     discountPct: number; discountScope: string; serviceIds: string[];
-    validFrom: string; validTo: string; customLink: string;
+    validFrom: string; validTo: string;
     message: string; scheduledAt?: string; recipientCount: number;
   }) {
     const salon = await this.prisma.salon.findFirst({ where: { id: body.salonId, ownerId } });
     if (!salon) throw new DomainException('NOT_FOUND', 'Salon not found', 404);
-    console.log('[Owner SMS Campaign]', JSON.stringify({ ownerId, ...body }, null, 2));
-    return { message: 'Campaign scheduled successfully', recipientCount: body.recipientCount };
+
+    const promo = await this.promoCodes.create({
+      salonId: body.salonId,
+      campaignName: body.campaignName,
+      recipientCount: body.recipientCount,
+      discountPct: body.discountPct,
+      discountScope: body.discountScope,
+      serviceIds: body.serviceIds ?? [],
+      validFrom: body.validFrom || undefined,
+      validTo: body.validTo || undefined,
+    });
+
+    console.log('[Owner SMS Campaign]', JSON.stringify({ ownerId, ...body, promoCode: promo.code }, null, 2));
+    return {
+      message: 'Campaign scheduled successfully',
+      recipientCount: body.recipientCount,
+      promoCode: promo.code,
+      salonSlug: salon.slug,
+    };
+  }
+
+  async getOwnerCampaignHistory(ownerId: string, salonId: string) {
+    const salon = await this.prisma.salon.findFirst({ where: { id: salonId, ownerId } });
+    if (!salon) throw new DomainException('NOT_FOUND', 'Salon not found', 404);
+
+    const requests = await this.prisma.smsCampaignRequest.findMany({
+      where: { salonId, ownerId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        promoCode: { select: { code: true, usageCount: true, active: true } },
+      },
+    });
+
+    return requests.map((r) => ({
+      id: r.id,
+      campaignName: r.campaignName,
+      discountPct: r.discountPct,
+      discountScope: r.discountScope,
+      recipientCount: r.recipientCount,
+      priceCents: r.priceCents,
+      status: r.status,
+      adminNote: r.adminNote,
+      validFrom: r.validFrom,
+      validTo: r.validTo,
+      receiptUrl: r.receiptUrl,
+      createdAt: r.createdAt,
+      promoCode: r.promoCode,
+    }));
   }
 
   private async buildInsights(

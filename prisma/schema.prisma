@@ -39,6 +39,12 @@ enum OwnerSubscriptionStatus {
   PAST_DUE
 }
 
+enum SmsCampaignRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -51,9 +57,10 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  ownedSalons        Salon[]             @relation("SalonOwner")
-  bookingsAsCustomer Booking[]          @relation("CustomerBookings")
+  ownedSalons        Salon[]               @relation("SalonOwner")
+  bookingsAsCustomer Booking[]            @relation("CustomerBookings")
   ownerSubscriptions OwnerSubscription[]
+  campaignRequests   SmsCampaignRequest[] @relation("OwnerCampaignRequests")
 
   @@map("users")
 }
@@ -111,11 +118,13 @@ model Salon {
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
-  owner       User          @relation("SalonOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  services    Service[]
-  bookings    Booking[]
-  gallery     GalleryItem[]
-  technicians Technician[]
+  owner            User                  @relation("SalonOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  services         Service[]
+  bookings         Booking[]
+  gallery          GalleryItem[]
+  technicians      Technician[]
+  promoCodes       PromoCode[]
+  campaignRequests SmsCampaignRequest[]
 
   @@index([name])
   @@index([city])
@@ -152,6 +161,8 @@ model Booking {
   salonId       String        @map("salon_id")
   serviceId     String        @map("service_id")
   technicianId  String?       @map("technician_id")
+  promoCodeId   String?       @map("promo_code_id")
+  discountPct   Int?          @map("discount_pct")
   startAt       DateTime      @map("start_at")
   endAt         DateTime      @map("end_at")
   status        BookingStatus @default(PENDING)
@@ -163,10 +174,12 @@ model Booking {
   salon      Salon       @relation(fields: [salonId], references: [id])
   service    Service     @relation(fields: [serviceId], references: [id])
   technician Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  promoCode  PromoCode?  @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
 
   @@index([customerId])
   @@index([salonId])
   @@index([technicianId])
+  @@index([promoCodeId])
   @@index([startAt])
   @@index([status])
   @@index([salonId, startAt])
@@ -212,4 +225,61 @@ model Technician {
 
   @@index([salonId])
   @@map("technicians")
+}
+
+model PromoCode {
+  id             String    @id @default(uuid())
+  salonId        String    @map("salon_id")
+  code           String    @unique
+  campaignName   String?   @map("campaign_name")
+  recipientCount Int       @default(0) @map("recipient_count")
+  discountPct    Int       @map("discount_pct")
+  discountScope  String    @map("discount_scope")
+  serviceIds     Json?     @map("service_ids")
+  validFrom      DateTime? @map("valid_from")
+  validTo        DateTime? @map("valid_to")
+  usageLimit     Int?      @map("usage_limit")
+  usageCount     Int       @default(0) @map("usage_count")
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  salon           Salon              @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  bookings        Booking[]
+  campaignRequest SmsCampaignRequest? @relation("CampaignRequestPromo")
+
+  @@index([salonId])
+  @@index([code])
+  @@map("promo_codes")
+}
+
+model SmsCampaignRequest {
+  id             String                   @id @default(uuid())
+  ownerId        String                   @map("owner_id")
+  salonId        String                   @map("salon_id")
+  promoCodeId    String?                  @unique @map("promo_code_id")
+  campaignName   String                   @map("campaign_name")
+  segment        String
+  discountPct    Int                      @map("discount_pct")
+  discountScope  String                   @map("discount_scope")
+  serviceIds     Json?                    @map("service_ids")
+  validFrom      DateTime?                @map("valid_from")
+  validTo        DateTime?                @map("valid_to")
+  message        String                   @db.Text
+  scheduledAt    DateTime?                @map("scheduled_at")
+  recipientCount Int                      @default(0) @map("recipient_count")
+  receiptUrl     String?                  @map("receipt_url") @db.Text
+  priceCents     Int                      @map("price_cents")
+  status         SmsCampaignRequestStatus @default(PENDING)
+  adminNote      String?                  @map("admin_note") @db.Text
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  updatedAt      DateTime                 @updatedAt @map("updated_at")
+
+  owner     User       @relation("OwnerCampaignRequests", fields: [ownerId], references: [id], onDelete: Cascade)
+  salon     Salon      @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  promoCode PromoCode? @relation("CampaignRequestPromo", fields: [promoCodeId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
+  @@index([salonId])
+  @@index([status])
+  @@map("sms_campaign_requests")
 }
