@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { BookingStatus, Role } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
+import { PlanGuardService } from '../plan-guard/plan-guard.service';
 import { NotificationProducerService } from '../notifications/notification-producer.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { assertValidBookingWindow, canTransitionStatus } from './domain/booking.policy';
@@ -15,16 +16,21 @@ export class BookingsService {
     private readonly bookingsRepository: BookingsRepository,
     private readonly notifications: NotificationProducerService,
     private readonly promoCodes: PromoCodesService,
+    private readonly planGuard: PlanGuardService,
   ) {}
 
   /** Public guest booking (no account). */
   async create(dto: CreateBookingDto) {
     const salon = await this.prisma.salon.findFirst({
       where: { id: dto.salonId, status: 'PUBLISHED' },
+      include: { owner: { select: { id: true } } },
     });
     if (!salon) {
       throw new DomainException('SALON_NOT_FOUND', 'Salon not available', 404);
     }
+
+    await this.planGuard.requireActiveSubscription(salon.owner.id);
+    const isOverage = await this.planGuard.isBookingOverage(salon.owner.id);
 
     const service = await this.prisma.service.findFirst({
       where: { id: dto.serviceId, salonId: dto.salonId, active: true },
@@ -70,7 +76,8 @@ export class BookingsService {
       ...(appliedPromo ? { promoCode: { connect: { id: appliedPromo.id } }, discountPct: appliedPromo.discountPct } : {}),
       startAt,
       endAt,
-      status: BookingStatus.PENDING,
+      status: BookingStatus.CONFIRMED,
+      isOverage,
       guestName: dto.guestName.trim(),
       guestEmail: dto.guestEmail.trim().toLowerCase(),
       guestPhone: dto.guestPhone.trim(),

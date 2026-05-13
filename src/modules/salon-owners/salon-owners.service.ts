@@ -72,7 +72,24 @@ export class SalonOwnersService {
 
     const insights = await this.buildInsights(salonIds, salons);
 
-    return { salons, subscription, insights };
+    const planLimits = subscription?.plan.limits as {
+      maxSalons?: number;
+      monthlyBookingLimit?: number;
+      maxGalleryImagesPerSalon?: number;
+      analyticsLevel?: string;
+    } | null ?? null;
+
+    return {
+      salons,
+      subscription,
+      insights,
+      planLimits: {
+        maxSalons: planLimits?.maxSalons ?? 1,
+        monthlyBookingLimit: planLimits?.monthlyBookingLimit ?? 200,
+        maxGalleryImagesPerSalon: planLimits?.maxGalleryImagesPerSalon ?? 10,
+        analyticsLevel: planLimits?.analyticsLevel ?? 'basic',
+      },
+    };
   }
 
   // ── SMS Campaign (scoped to owner's salon) ──────────────────────────────
@@ -227,6 +244,26 @@ export class SalonOwnersService {
     }));
   }
 
+  async getInsights(ownerId: string, salonId: string, role: Role) {
+    if (role !== Role.SALON_ADMIN) {
+      throw new DomainException('FORBIDDEN', 'Owner only', 403);
+    }
+    const salon = await this.prisma.salon.findFirst({
+      where: { id: salonId, ownerId },
+      include: { _count: { select: { bookings: true, services: true } } },
+    });
+    if (!salon) throw new DomainException('NOT_FOUND', 'Salon not found', 404);
+
+    const activeServices = await this.prisma.service.count({
+      where: { salonId, active: true },
+    });
+
+    return this.buildInsights(
+      [salonId],
+      [{ _count: { bookings: salon._count.bookings, services: activeServices } }],
+    );
+  }
+
   private async buildInsights(
     salonIds: string[],
     salons: { _count: { bookings: number; services: number } }[],
@@ -234,7 +271,6 @@ export class SalonOwnersService {
     const empty = {
       totals: {
         bookings: 0,
-        pendingBookings: 0,
         confirmedBookings: 0,
         activeServices: salons.reduce((acc, s) => acc + s._count.services, 0),
         completedRevenueCents: 0,
@@ -263,7 +299,7 @@ export class SalonOwnersService {
       }),
       this.prisma.booking.groupBy({
         by: ['salonId'],
-        where: { salonId: { in: salonIds }, status: BookingStatus.PENDING },
+        where: { salonId: { in: salonIds }, status: BookingStatus.CONFIRMED },
         _count: { _all: true },
       }),
       this.prisma.booking.findMany({
@@ -288,7 +324,6 @@ export class SalonOwnersService {
     for (const row of statusAgg) {
       const n = row._count._all;
       totals.bookings += n;
-      if (row.status === BookingStatus.PENDING) totals.pendingBookings = n;
       if (row.status === BookingStatus.CONFIRMED) totals.confirmedBookings = n;
     }
 

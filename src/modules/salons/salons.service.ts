@@ -1,18 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, Role, SalonStatus } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
+import { PlanGuardService } from '../plan-guard/plan-guard.service';
 import { SalonsRepository } from './repositories/salons.repository';
 import { CreateSalonDto } from './dto/create-salon.dto';
 import { UpdateSalonDto } from './dto/update-salon.dto';
 
 @Injectable()
 export class SalonsService {
-  constructor(private readonly salonsRepository: SalonsRepository) {}
+  constructor(
+    private readonly salonsRepository: SalonsRepository,
+    private readonly planGuard: PlanGuardService,
+  ) {}
 
   async create(dto: CreateSalonDto, ownerId: string, role: Role) {
     if (role !== Role.SALON_ADMIN) {
       throw new DomainException('FORBIDDEN', 'Only salon owners can create salons', 403);
     }
+    await this.planGuard.checkSalonLimit(ownerId);
     const existing = await this.salonsRepository.findBySlug(dto.slug);
     if (existing) {
       throw new DomainException('SLUG_IN_USE', 'Slug already taken', 409);
@@ -96,5 +101,24 @@ export class SalonsService {
       }
       return s;
     });
+  }
+
+  async getBranchesBySlug(slug: string) {
+    const salon = await this.salonsRepository.findBySlug(slug);
+    if (!salon || salon.status !== SalonStatus.PUBLISHED) {
+      throw new DomainException('NOT_FOUND', 'Salon not found', 404);
+    }
+    return this.salonsRepository.findPublishedByOwner(salon.ownerId);
+  }
+
+  async setDefault(salonId: string, ownerId: string, role: Role) {
+    if (role !== Role.SALON_ADMIN) {
+      throw new DomainException('FORBIDDEN', 'Only owners can set a default branch', 403);
+    }
+    const salon = await this.salonsRepository.findById(salonId);
+    if (!salon || salon.ownerId !== ownerId) {
+      throw new DomainException('NOT_FOUND', 'Salon not found', 404);
+    }
+    return this.salonsRepository.setDefault(ownerId, salonId);
   }
 }

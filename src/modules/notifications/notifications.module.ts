@@ -16,6 +16,6 @@ import { ConsoleWhatsAppProvider } from './providers/console-whatsapp.provider';
     ConsoleSmsProvider,
     ConsoleWhatsAppProvider,
   ],
-  exports: [NotificationProducerService, BullModule],
+  exports: [NotificationProducerService, NotificationDispatcherService, BullModule],
 })
 export class NotificationsModule {}

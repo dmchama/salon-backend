@@ -2,11 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { PlanGuardService } from '../plan-guard/plan-guard.service';
 import { CreateGalleryItemDto } from './dto/create-gallery-item.dto';
 
 @Injectable()
 export class GalleryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly planGuard: PlanGuardService,
+  ) {}
 
   async addItem(dto: CreateGalleryItemDto, ownerId: string, role: Role) {
     if (role !== Role.SALON_ADMIN) {
@@ -18,6 +22,7 @@ export class GalleryService {
     if (!salon) {
       throw new DomainException('NOT_FOUND', 'Salon not found', 404);
     }
+    await this.planGuard.checkGalleryLimit(ownerId, dto.salonId);
     return this.prisma.galleryItem.create({
       data: {
         salonId: dto.salonId,

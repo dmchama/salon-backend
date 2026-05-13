@@ -9,7 +9,6 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
-import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
 
 @ApiTags('bookings')
 @Controller({ path: 'bookings', version: '1' })
@@ -45,15 +44,4 @@ export class BookingsController {
     return this.bookingsService.updateStatus(id, dto.status, user.sub, user.role as Role);
   }
 
-  @ApiBearerAuth('access-token')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Patch(':id/schedule')
-  @Roles(Role.SUPER_ADMIN, Role.SALON_ADMIN)
-  reschedule(
-    @Param('id') id: string,
-    @Body() dto: RescheduleBookingDto,
-    @CurrentUser() user: JwtPayloadUser,
-  ) {
-    return this.bookingsService.reschedule(id, dto.startAt, user.sub, user.role as Role);
-  }
 }

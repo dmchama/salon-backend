@@ -28,6 +28,14 @@ export class SalonOwnersController {
     return this.salonOwnersService.dashboard(user.sub, user.role as Role);
   }
 
+  @Get('me/insights')
+  insights(
+    @CurrentUser() user: JwtPayloadUser,
+    @Query('salonId') salonId: string,
+  ) {
+    return this.salonOwnersService.getInsights(user.sub, salonId, user.role as Role);
+  }
+
   @Get('campaign/customers')
   getOwnerCampaignCustomers(
     @CurrentUser() user: JwtPayloadUser,

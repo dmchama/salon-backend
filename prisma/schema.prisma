@@ -25,7 +25,6 @@ enum SalonStatus {
 }
 
 enum BookingStatus {
-  PENDING
   CONFIRMED
   CANCELLED
   COMPLETED
@@ -45,6 +44,13 @@ enum SmsCampaignRequestStatus {
   REJECTED
 }
 
+enum OverageInvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  CANCELLED
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -61,6 +67,7 @@ model User {
   bookingsAsCustomer Booking[]            @relation("CustomerBookings")
   ownerSubscriptions OwnerSubscription[]
   campaignRequests   SmsCampaignRequest[] @relation("OwnerCampaignRequests")
+  overageInvoices    OverageInvoice[]
 
   @@map("users")
 }
@@ -73,6 +80,7 @@ model SubscriptionPlan {
   currency       String   @default("USD")
   intervalMonths Int      @default(1) @map("interval_months")
   features       Json?
+  limits         Json?
   active         Boolean  @default(true)
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -115,6 +123,7 @@ model Salon {
   websiteUrl     String?     @map("website_url")
   businessHours  Json?       @map("business_hours")
   status         SalonStatus @default(DRAFT)
+  isDefault      Boolean     @default(false) @map("is_default")
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
@@ -165,7 +174,8 @@ model Booking {
   discountPct   Int?          @map("discount_pct")
   startAt       DateTime      @map("start_at")
   endAt         DateTime      @map("end_at")
-  status        BookingStatus @default(PENDING)
+  status        BookingStatus @default(CONFIRMED)
+  isOverage     Boolean       @default(false) @map("is_overage")
   notes         String?       @db.Text
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
@@ -282,4 +292,37 @@ model SmsCampaignRequest {
   @@index([salonId])
   @@index([status])
   @@map("sms_campaign_requests")
+}
+
+model OveragePricing {
+  id         String   @id @default(uuid())
+  priceCents Int      @map("price_cents")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("overage_pricing")
+}
+
+model OverageInvoice {
+  id                String               @id @default(uuid())
+  ownerId           String               @map("owner_id")
+  year              Int
+  month             Int
+  bookingLimit      Int                  @map("booking_limit")
+  totalBookings     Int                  @map("total_bookings")
+  overageCount      Int                  @map("overage_count")
+  overagePriceCents Int                  @map("overage_price_cents")
+  totalCents        Int                  @map("total_cents")
+  status            OverageInvoiceStatus @default(DRAFT)
+  sentAt            DateTime?            @map("sent_at")
+  paidAt            DateTime?            @map("paid_at")
+  notes             String?              @db.Text
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, year, month])
+  @@index([ownerId])
+  @@index([status])
+  @@map("overage_invoices")
 }

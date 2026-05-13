@@ -32,4 +32,42 @@ export class NotificationDispatcherService {
       metadata: { planName, expiresAt: expiresAt.toISOString() },
     });
   }
+
+  async dispatchOverageInvoice(
+    email: string,
+    ownerName: string,
+    invoice: {
+      year: number;
+      month: number;
+      bookingLimit: number;
+      totalBookings: number;
+      overageCount: number;
+      overagePriceCents: number;
+      totalCents: number;
+    },
+  ): Promise<void> {
+    const monthLabel = new Date(invoice.year, invoice.month - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    const totalRs = (invoice.totalCents / 100).toFixed(2);
+    const priceRs = (invoice.overagePriceCents / 100).toFixed(2);
+    await this.email.send(email, {
+      title: `Overage Invoice — ${monthLabel}`,
+      body: [
+        `Dear ${ownerName},`,
+        ``,
+        `Your account exceeded the included booking quota for ${monthLabel}.`,
+        ``,
+        `  Included bookings : ${invoice.bookingLimit}`,
+        `  Total bookings    : ${invoice.totalBookings}`,
+        `  Overage bookings  : ${invoice.overageCount}`,
+        `  Rate per booking  : Rs. ${priceRs}`,
+        `  Amount due        : Rs. ${totalRs}`,
+        ``,
+        `Please settle this invoice to avoid service interruption.`,
+        ``,
+        `Thank you,`,
+        `GlamBook Platform`,
+      ].join('\n'),
+      metadata: { ...invoice },
+    });
+  }
 }

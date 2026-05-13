@@ -39,6 +39,21 @@ export class SalonsRepository {
     return this.prisma.salon.findMany({ where: { ownerId } });
   }
 
+  findPublishedByOwner(ownerId: string) {
+    return this.prisma.salon.findMany({
+      where: { ownerId, status: SalonStatus.PUBLISHED },
+      select: { id: true, name: true, slug: true, address: true, city: true, country: true, isDefault: true },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  async setDefault(ownerId: string, salonId: string): Promise<Salon> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.salon.updateMany({ where: { ownerId }, data: { isDefault: false } });
+      return tx.salon.update({ where: { id: salonId }, data: { isDefault: true } });
+    });
+  }
+
   updateStatus(id: string, status: SalonStatus): Promise<Salon> {
     return this.prisma.salon.update({ where: { id }, data: { status } });
   }

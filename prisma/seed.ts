@@ -43,7 +43,8 @@ async function main() {
         priceCents: 199_900,
         currency: 'LKR',
         intervalMonths: 1,
-        features: ['1 salon listing', 'Up to 50 bookings/month', 'Basic booking management', '1 staff member'],
+        features: ['1 salon branch', '200 bookings/month included', 'SMS campaigns', 'Promo codes', '10 gallery images/salon', 'Basic analytics'],
+        limits: { maxSalons: 1, monthlyBookingLimit: 200, maxGalleryImagesPerSalon: 10, analyticsLevel: 'basic' },
         active: true,
       },
     }),
@@ -54,7 +55,8 @@ async function main() {
         priceCents: 499_900,
         currency: 'LKR',
         intervalMonths: 1,
-        features: ['3 salon listings', 'Unlimited bookings', 'Technician management', 'Gallery uploads', 'Priority support', 'Up to 5 staff'],
+        features: ['Up to 3 salon branches', '500 bookings/month included', 'SMS campaigns', 'Promo codes', '30 gallery images/salon', 'Full analytics'],
+        limits: { maxSalons: 3, monthlyBookingLimit: 500, maxGalleryImagesPerSalon: 20, analyticsLevel: 'full' },
         active: true,
       },
     }),
@@ -65,7 +67,8 @@ async function main() {
         priceCents: 999_900,
         currency: 'LKR',
         intervalMonths: 1,
-        features: ['Unlimited salons', 'Dedicated account manager', 'Analytics dashboard', 'API access', 'Custom branding'],
+        features: ['Unlimited salon branches', '1000 bookings/month included', 'SMS campaigns', 'Promo codes', 'Unlimited gallery images', 'Full analytics + export'],
+        limits: { maxSalons: -1, monthlyBookingLimit: 1000, maxGalleryImagesPerSalon: 50, analyticsLevel: 'full_export' },
         active: true,
       },
     }),
@@ -211,7 +214,7 @@ async function main() {
   await prisma.booking.createMany({
     data: [
       // Salon 1 — future
-      { salonId: salon1.id, serviceId: svc1a.id, technicianId: tech1a.id, guestName: 'Amali Gunawardena',    guestEmail: 'amali.g@gmail.com',   guestPhone: '+94-77-900-0001', ...slot(1,  10, 60),  status: BookingStatus.PENDING },
+      { salonId: salon1.id, serviceId: svc1a.id, technicianId: tech1a.id, guestName: 'Amali Gunawardena',    guestEmail: 'amali.g@gmail.com',   guestPhone: '+94-77-900-0001', ...slot(1,  10, 60),  status: BookingStatus.CONFIRMED },
       { salonId: salon1.id, serviceId: svc1b.id, technicianId: tech1b.id, guestName: 'Sachini Rathnayake',   guestEmail: 'sachini.r@gmail.com', guestPhone: '+94-77-900-0002', ...slot(2,  14, 120), status: BookingStatus.CONFIRMED, notes: 'Wants to go 2 shades lighter.' },
       { salonId: salon1.id, serviceId: svc1c.id, technicianId: tech1a.id, guestName: 'Dulani Senanayake',    guestEmail: 'dulani.s@gmail.com',                                  ...slot(3,  11, 150), status: BookingStatus.CONFIRMED },
       // Salon 1 — past this month
@@ -224,7 +227,7 @@ async function main() {
       { salonId: salon1.id, serviceId: svc1d.id, technicianId: tech1b.id, guestName: 'Malsha Rajapaksa',     guestEmail: 'malsha.r@gmail.com',                                  ...pastSlot(65, 11, 180), status: BookingStatus.COMPLETED },
 
       // Salon 2 — future
-      { salonId: salon2.id, serviceId: svc2b.id, technicianId: tech2a.id, guestName: 'Ravindu Jayasinghe',   guestEmail: 'ravindu.j@gmail.com', guestPhone: '+94-77-910-0001', ...slot(1,  11, 45),  status: BookingStatus.PENDING },
+      { salonId: salon2.id, serviceId: svc2b.id, technicianId: tech2a.id, guestName: 'Ravindu Jayasinghe',   guestEmail: 'ravindu.j@gmail.com', guestPhone: '+94-77-910-0001', ...slot(1,  11, 45),  status: BookingStatus.CONFIRMED },
       { salonId: salon2.id, serviceId: svc2a.id, technicianId: tech2b.id, guestName: 'Kasun Perera',         guestEmail: 'kasun.p@gmail.com',                                   ...slot(2,  9,  30),  status: BookingStatus.CONFIRMED },
       { salonId: salon2.id, serviceId: svc2c.id, technicianId: tech2a.id, guestName: 'Buddhika Silva',       guestEmail: 'buddhika.s@gmail.com',                                ...slot(0,  16, 20),  status: BookingStatus.CONFIRMED },
       // Salon 2 — past
@@ -234,8 +237,8 @@ async function main() {
       { salonId: salon2.id, serviceId: svc2a.id, technicianId: tech2a.id, guestName: 'Dinesh Alwis',         guestEmail: 'dinesh.a@gmail.com',                                  ...pastSlot(70, 15, 30),  status: BookingStatus.COMPLETED },
 
       // Salon 3 — future
-      { salonId: salon3.id, serviceId: svc3b.id, technicianId: tech3a.id, guestName: 'Thisari Herath',       guestEmail: 'thisari.h@gmail.com', guestPhone: '+94-77-920-0001', ...slot(1,  10, 60),  status: BookingStatus.PENDING },
-      { salonId: salon3.id, serviceId: svc3d.id, technicianId: tech3a.id, guestName: 'Sanduni Mendis',       guestEmail: 'sanduni.m@gmail.com',                                 ...slot(2,  13, 90),  status: BookingStatus.PENDING, notes: 'Wants coffin shape, hot pink.' },
+      { salonId: salon3.id, serviceId: svc3b.id, technicianId: tech3a.id, guestName: 'Thisari Herath',       guestEmail: 'thisari.h@gmail.com', guestPhone: '+94-77-920-0001', ...slot(1,  10, 60),  status: BookingStatus.CONFIRMED },
+      { salonId: salon3.id, serviceId: svc3d.id, technicianId: tech3a.id, guestName: 'Sanduni Mendis',       guestEmail: 'sanduni.m@gmail.com',                                 ...slot(2,  13, 90),  status: BookingStatus.CONFIRMED, notes: 'Wants coffin shape, hot pink.' },
       { salonId: salon3.id, serviceId: svc3c.id, technicianId: tech3b.id, guestName: 'Oshadi Hirimuthugoda', guestEmail: 'oshadi.h@gmail.com',                                  ...slot(3,  15, 60),  status: BookingStatus.CONFIRMED },
       // Salon 3 — past
       { salonId: salon3.id, serviceId: svc3a.id, technicianId: tech3b.id, guestName: 'Dilukshi Gamage',      guestEmail: 'dilukshi.g@gmail.com',                                ...pastSlot(4,  11, 45),  status: BookingStatus.COMPLETED },

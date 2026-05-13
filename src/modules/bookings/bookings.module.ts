@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PlanGuardModule } from '../plan-guard/plan-guard.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
 import { BookingsController } from './bookings.controller';
@@ -6,7 +7,7 @@ import { BookingsService } from './bookings.service';
 import { BookingsRepository } from './repositories/bookings.repository';
 
 @Module({
-  imports: [NotificationsModule, PromoCodesModule],
+  imports: [NotificationsModule, PromoCodesModule, PlanGuardModule],
   controllers: [BookingsController],
   providers: [BookingsService, BookingsRepository],
   exports: [BookingsService],

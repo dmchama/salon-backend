@@ -7,6 +7,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { AdminService } from './admin.service';
+import { OverageService } from './overage.service';
 
 @ApiTags('admin')
 @Controller({ path: 'website-settings', version: '1' })
@@ -26,7 +27,10 @@ export class PublicWebsiteController {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.SUPER_ADMIN)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly overageService: OverageService,
+  ) {}
 
   @Get('stats')
   stats(@CurrentUser() user: JwtPayloadUser) {
@@ -118,6 +122,11 @@ export class AdminController {
     return this.adminService.setSmsCampaignPrice(body.priceCents);
   }
 
+  @Get('promo-codes')
+  listPromoCodes() {
+    return this.adminService.listPromoCodes();
+  }
+
   @Get('campaign-requests')
   listCampaignRequests() {
     return this.adminService.listCampaignRequests();
@@ -131,5 +140,44 @@ export class AdminController {
   @Patch('campaign-requests/:id/reject')
   rejectCampaignRequest(@Param('id') id: string, @Body() body: { note?: string }) {
     return this.adminService.rejectCampaignRequest(id, body.note ?? '');
+  }
+
+  // ── Overage Price ────────────────────────────────────────────────────────
+
+  @Get('overage-price')
+  getOveragePrice() {
+    return this.overageService.getOveragePrice();
+  }
+
+  @Patch('overage-price')
+  setOveragePrice(@Body() body: { priceCents: number }) {
+    return this.overageService.setOveragePrice(body.priceCents);
+  }
+
+  // ── Overage Invoices ─────────────────────────────────────────────────────
+
+  @Post('overage-invoices/generate')
+  generateInvoices(@Body() body: { year: number; month: number }) {
+    return this.overageService.generateInvoices(body.year, body.month);
+  }
+
+  @Get('overage-invoices')
+  listInvoices(@Query('status') status?: string) {
+    return this.overageService.listInvoices(status);
+  }
+
+  @Patch('overage-invoices/:id/send')
+  sendInvoice(@Param('id') id: string) {
+    return this.overageService.sendInvoice(id);
+  }
+
+  @Patch('overage-invoices/:id/paid')
+  markInvoicePaid(@Param('id') id: string) {
+    return this.overageService.markPaid(id);
+  }
+
+  @Patch('overage-invoices/:id/cancel')
+  cancelInvoice(@Param('id') id: string) {
+    return this.overageService.cancelInvoice(id);
   }
 }

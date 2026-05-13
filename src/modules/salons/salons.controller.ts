@@ -52,4 +52,18 @@ export class SalonsController {
   getPublic(@Param('slug') slug: string) {
     return this.salonsService.getPublicBySlug(slug);
   }
+
+  @Public()
+  @Get('public/:slug/branches')
+  getBranches(@Param('slug') slug: string) {
+    return this.salonsService.getBranchesBySlug(slug);
+  }
+
+  @Patch(':id/default')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SALON_ADMIN)
+  setDefault(@Param('id') id: string, @CurrentUser() user: JwtPayloadUser) {
+    return this.salonsService.setDefault(id, user.sub, user.role as Role);
+  }
 }

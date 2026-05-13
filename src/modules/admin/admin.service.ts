@@ -77,7 +77,7 @@ export class AdminService {
 
     // Active bookings
     const activeBookings = bookingStatusGroups
-      .filter((g) => g.status === 'PENDING' || g.status === 'CONFIRMED')
+      .filter((g) => g.status === 'CONFIRMED')
       .reduce((sum, g) => sum + g._count.id, 0);
 
     // Plan distribution
@@ -91,12 +91,12 @@ export class AdminService {
           : 0,
     }));
 
-    // Revenue this month / last month — from subscription starts in each period
-    const revenueThisMonth = await this.revenueInRange(startOfThisMonth, now);
-    const revenueLastMonth = await this.revenueInRange(
-      startOfLastMonth,
-      startOfThisMonth,
-    );
+    // Revenue this month / last month / all-time — from subscription starts in each period
+    const [revenueThisMonth, revenueLastMonth, revenueTotalCents] = await Promise.all([
+      this.revenueInRange(startOfThisMonth, now),
+      this.revenueInRange(startOfLastMonth, startOfThisMonth),
+      this.revenueAllTime(),
+    ]);
 
     // Last 6 months series
     const monthSlots = Array.from({ length: 6 }, (_, i) => {
@@ -143,6 +143,7 @@ export class AdminService {
         activeSubscriptions,
         revenueThisMonthCents: revenueThisMonth,
         revenueLastMonthCents: revenueLastMonth,
+        revenueTotalCents,
       },
       bookingsByStatus: bookingStatusGroups.map((g) => ({
         status: g.status,
@@ -512,6 +513,34 @@ export class AdminService {
   private async revenueInRange(from: Date, to: Date): Promise<number> {
     const subs = await this.prisma.ownerSubscription.findMany({
       where: { startsAt: { gte: from, lt: to } },
+      include: { plan: { select: { priceCents: true } } },
+    });
+    return subs.reduce((sum, s) => sum + s.plan.priceCents, 0);
+  }
+
+  async listPromoCodes() {
+    const codes = await this.prisma.promoCode.findMany({
+      include: { salon: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return codes.map((c) => ({
+      id: c.id,
+      code: c.code,
+      salonName: c.salon.name,
+      campaignName: c.campaignName ?? null,
+      discountPct: c.discountPct,
+      discountScope: c.discountScope,
+      usageCount: c.usageCount,
+      usageLimit: c.usageLimit ?? null,
+      validFrom: c.validFrom ?? null,
+      validTo: c.validTo ?? null,
+      active: c.active,
+      createdAt: c.createdAt,
+    }));
+  }
+
+  private async revenueAllTime(): Promise<number> {
+    const subs = await this.prisma.ownerSubscription.findMany({
       include: { plan: { select: { priceCents: true } } },
     });
     return subs.reduce((sum, s) => sum + s.plan.priceCents, 0);
