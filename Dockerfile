@@ -9,7 +9,7 @@ COPY prisma ./prisma
 RUN npm ci
 
 COPY . .
-RUN npm run build && ls dist/main.js
+RUN ls src/ && npx tsc -p tsconfig.build.json && ls dist/main.js
 
 # ── Stage 2: Production ───────────────────────────────────────────────────────
 FROM node:20-alpine
