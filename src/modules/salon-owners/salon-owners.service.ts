@@ -3,6 +3,7 @@ import { BookingStatus, Role } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
+import { SmslenzService } from '../notifications/providers/smslenz.service';
 
 function startOfUtcDay(d: Date): Date {
   const x = new Date(d);
@@ -25,6 +26,7 @@ export class SalonOwnersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly promoCodes: PromoCodesService,
+    private readonly sms: SmslenzService,
   ) {}
 
   async dashboard(ownerId: string, role: Role) {
@@ -206,10 +208,15 @@ export class SalonOwnersService {
       validTo: body.validTo || undefined,
     });
 
-    console.log('[Owner SMS Campaign]', JSON.stringify({ ownerId, ...body, promoCode: promo.code }, null, 2));
+    const { customers } = await this.getOwnerCampaignCustomers(ownerId, body.salonId, body.segment);
+    const phones = customers.map((c) => c.phone).filter(Boolean);
+    if (phones.length > 0) {
+      await this.sms.sendBulkSms(phones, body.message);
+    }
+
     return {
-      message: 'Campaign scheduled successfully',
-      recipientCount: body.recipientCount,
+      message: 'Campaign sent successfully',
+      recipientCount: phones.length,
       promoCode: promo.code,
       salonSlug: salon.slug,
     };

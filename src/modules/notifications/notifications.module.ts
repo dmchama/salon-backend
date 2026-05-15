@@ -6,6 +6,7 @@ import { NotificationProducerService } from './notification-producer.service';
 import { ConsoleEmailProvider } from './providers/console-email.provider';
 import { ConsoleSmsProvider } from './providers/console-sms.provider';
 import { ConsoleWhatsAppProvider } from './providers/console-whatsapp.provider';
+import { SmslenzService } from './providers/smslenz.service';
 
 @Module({
   imports: [BullModule.registerQueue({ name: NOTIFICATIONS_QUEUE })],
@@ -15,7 +16,8 @@ import { ConsoleWhatsAppProvider } from './providers/console-whatsapp.provider';
     ConsoleEmailProvider,
     ConsoleSmsProvider,
     ConsoleWhatsAppProvider,
+    SmslenzService,
   ],
-  exports: [NotificationProducerService, NotificationDispatcherService, BullModule],
+  exports: [NotificationProducerService, NotificationDispatcherService, SmslenzService, BullModule],
 })
 export class NotificationsModule {}

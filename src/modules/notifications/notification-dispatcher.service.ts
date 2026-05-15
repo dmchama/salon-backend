@@ -1,9 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { ConsoleEmailProvider } from './providers/console-email.provider';
+import { SmslenzService } from './providers/smslenz.service';
+
+function fmtDate(d: Date): string {
+  return d.toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Colombo',
+  });
+}
+
+function fmtTime(d: Date): string {
+  return d.toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Colombo',
+  });
+}
 
 @Injectable()
 export class NotificationDispatcherService {
-  constructor(private readonly email: ConsoleEmailProvider) {}
+  constructor(
+    private readonly email: ConsoleEmailProvider,
+    private readonly sms: SmslenzService,
+  ) {}
 
   async dispatchBookingConfirmation(email: string, salonName: string, startAt: Date): Promise<void> {
     await this.email.send(email, {
@@ -11,6 +27,39 @@ export class NotificationDispatcherService {
       body: `Your booking at ${salonName} is confirmed for ${startAt.toISOString()}`,
       metadata: { salonName, startAt: startAt.toISOString() },
     });
+  }
+
+  async dispatchBookingConfirmationSms(
+    phone: string,
+    guestName: string,
+    salonName: string,
+    serviceName: string,
+    startAt: Date,
+  ): Promise<void> {
+    const message = [
+      `Hi ${guestName},`,
+      `Your ${serviceName} booking is confirmed.`,
+      `Date: ${fmtDate(startAt)}`,
+      `Time: ${fmtTime(startAt)}`,
+      salonName,
+    ].join('\n');
+    await this.sms.sendBulkSms([phone], message);
+  }
+
+  async dispatchBookingCancellationSms(
+    phone: string,
+    guestName: string,
+    salonName: string,
+    startAt: Date,
+  ): Promise<void> {
+    const message = [
+      `Hi ${guestName},`,
+      `Your booking at ${salonName} has been cancelled.`,
+      `Date: ${fmtDate(startAt)}`,
+      `Time: ${fmtTime(startAt)}`,
+      `Please contact us to rebook.`,
+    ].join('\n');
+    await this.sms.sendBulkSms([phone], message);
   }
 
   async dispatchBookingStatusUpdate(

@@ -22,4 +22,9 @@ export default () => ({
     apiKey: process.env.CLOUDINARY_API_KEY ?? '',
     apiSecret: process.env.CLOUDINARY_API_SECRET ?? '',
   },
+  smslenz: {
+    userId: process.env.SMSLENZ_USER_ID ?? '',
+    apiKey: process.env.SMSLENZ_API_KEY ?? '',
+    senderId: process.env.SMSLENZ_SENDER_ID ?? 'SMSlenzDEMO',
+  },
 });

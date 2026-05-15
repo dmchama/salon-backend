@@ -1,5 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { BookingStatus } from '@prisma/client';
 import { Job } from 'bullmq';
 import { NOTIFICATIONS_QUEUE, NotificationJobName } from '../../common/constants/queues';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
@@ -39,41 +40,57 @@ export class NotificationProcessor extends WorkerHost {
   private async handleBookingCreated(data: BookingNotificationPayload): Promise<void> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: data.bookingId },
-      include: {
-        customer: true,
-        salon: true,
-      },
+      include: { customer: true, salon: true, service: true },
     });
     if (!booking) {
       this.logger.warn(`Booking ${data.bookingId} not found for notification`);
       return;
     }
+
     const email = booking.customer?.email ?? booking.guestEmail;
-    if (!email) {
-      this.logger.warn(`Booking ${data.bookingId} has no recipient email`);
-      return;
+    if (email) {
+      await this.dispatcher.dispatchBookingConfirmation(email, booking.salon.name, booking.startAt);
     }
-    await this.dispatcher.dispatchBookingConfirmation(email, booking.salon.name, booking.startAt);
+
+    const phone = booking.guestPhone;
+    const name = booking.guestName ?? booking.customer?.firstName ?? 'Customer';
+    if (phone) {
+      await this.dispatcher.dispatchBookingConfirmationSms(
+        phone,
+        name,
+        booking.salon.name,
+        booking.service.name,
+        booking.startAt,
+      );
+    }
   }
 
   private async handleBookingStatusUpdated(data: BookingNotificationPayload): Promise<void> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: data.bookingId },
-      include: {
-        customer: true,
-        salon: true,
-      },
+      include: { customer: true, salon: true, service: true },
     });
     if (!booking) {
       this.logger.warn(`Booking ${data.bookingId} not found for notification`);
       return;
     }
+
     const email = booking.customer?.email ?? booking.guestEmail;
-    if (!email) {
-      this.logger.warn(`Booking ${data.bookingId} has no recipient email`);
-      return;
+    if (email) {
+      await this.dispatcher.dispatchBookingStatusUpdate(email, booking.salon.name, booking.status);
     }
-    await this.dispatcher.dispatchBookingStatusUpdate(email, booking.salon.name, booking.status);
+
+    // Send SMS only on cancellation
+    const phone = booking.guestPhone;
+    const name = booking.guestName ?? booking.customer?.firstName ?? 'Customer';
+    if (phone && booking.status === BookingStatus.CANCELLED) {
+      await this.dispatcher.dispatchBookingCancellationSms(
+        phone,
+        name,
+        booking.salon.name,
+        booking.startAt,
+      );
+    }
   }
 
   private async handleSubscriptionExpiring(data: SubscriptionReminderPayload): Promise<void> {

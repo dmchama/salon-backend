@@ -3,6 +3,7 @@ import { Prisma, Role } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
+import { SmslenzService } from '../notifications/providers/smslenz.service';
 
 type HeroSlide = {
   id: string;
@@ -18,6 +19,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly promoCodes: PromoCodesService,
+    private readonly sms: SmslenzService,
   ) {}
 
   async stats(role: Role) {
@@ -411,8 +413,12 @@ export class AdminService {
     scheduledAt?: string;
     recipientCount: number;
   }) {
-    console.log('[SMS Campaign]', JSON.stringify(body, null, 2));
-    return { message: 'Campaign scheduled successfully', recipientCount: body.recipientCount };
+    const { customers } = await this.getCampaignCustomers(body.segment);
+    const phones = customers.map((c) => c.phone).filter(Boolean);
+    if (phones.length > 0) {
+      await this.sms.sendBulkSms(phones, body.message);
+    }
+    return { message: 'Campaign sent successfully', recipientCount: phones.length };
   }
 
   // ── SMS Campaign Price & Requests ─────────────────────────────────────────
@@ -491,8 +497,33 @@ export class AdminService {
       data: { status: 'APPROVED', promoCodeId: promo.id },
     });
 
+    // Fetch phones for the campaign's salon + segment and send SMS
+    const now = new Date();
+    const segmentWhere: Prisma.BookingWhereInput = { salonId: req.salonId, guestPhone: { not: null } };
+    if (req.segment === 'last3months') {
+      const d = new Date(now); d.setMonth(d.getMonth() - 3); segmentWhere.startAt = { gte: d };
+    } else if (req.segment === 'last6months') {
+      const d = new Date(now); d.setMonth(d.getMonth() - 6); segmentWhere.startAt = { gte: d };
+    } else if (req.segment === 'last12months') {
+      const d = new Date(now); d.setMonth(d.getMonth() - 12); segmentWhere.startAt = { gte: d };
+    }
+    const bookings = await this.prisma.booking.findMany({
+      where: segmentWhere,
+      select: { guestPhone: true },
+    });
+    const phoneSet = new Set(bookings.map((b) => b.guestPhone).filter(Boolean) as string[]);
+    let phones = Array.from(phoneSet);
+    if (req.segment === 'regular') {
+      const counts = new Map<string, number>();
+      bookings.forEach((b) => { if (b.guestPhone) counts.set(b.guestPhone, (counts.get(b.guestPhone) ?? 0) + 1); });
+      phones = phones.filter((p) => (counts.get(p) ?? 0) >= 2);
+    }
+    if (phones.length > 0 && req.message) {
+      await this.sms.sendBulkSms(phones, req.message);
+    }
+
     const salon = await this.prisma.salon.findUnique({ where: { id: req.salonId } });
-    return { message: 'Campaign approved', promoCode: promo.code, salonSlug: salon?.slug ?? '' };
+    return { message: 'Campaign approved and SMS sent', promoCode: promo.code, salonSlug: salon?.slug ?? '', recipientCount: phones.length };
   }
 
   async rejectCampaignRequest(id: string, note: string) {
