@@ -9,6 +9,7 @@ import { NotificationProcessor } from './notification.processor';
 import { ConsoleEmailProvider } from './providers/console-email.provider';
 import { ConsoleSmsProvider } from './providers/console-sms.provider';
 import { ConsoleWhatsAppProvider } from './providers/console-whatsapp.provider';
+import { SmslenzService } from './providers/smslenz.service';
 import { SubscriptionExpirySchedulerService } from './subscription-expiry.scheduler';
 
 @Module({
@@ -36,6 +37,7 @@ import { SubscriptionExpirySchedulerService } from './subscription-expiry.schedu
     ConsoleEmailProvider,
     ConsoleSmsProvider,
     ConsoleWhatsAppProvider,
+    SmslenzService,
   ],
 })
 export class NotificationsWorkerModule {}

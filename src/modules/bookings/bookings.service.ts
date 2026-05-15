@@ -3,11 +3,19 @@ import { BookingStatus, Role } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { PlanGuardService } from '../plan-guard/plan-guard.service';
 import { NotificationProducerService } from '../notifications/notification-producer.service';
+import { SmslenzService } from '../notifications/providers/smslenz.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { assertValidBookingWindow, canTransitionStatus } from './domain/booking.policy';
 import { BookingsRepository } from './repositories/bookings.repository';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+
+function fmtDate(d: Date): string {
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Colombo' });
+}
+function fmtTime(d: Date): string {
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Colombo' });
+}
 
 @Injectable()
 export class BookingsService {
@@ -15,6 +23,7 @@ export class BookingsService {
     private readonly prisma: PrismaService,
     private readonly bookingsRepository: BookingsRepository,
     private readonly notifications: NotificationProducerService,
+    private readonly sms: SmslenzService,
     private readonly promoCodes: PromoCodesService,
     private readonly planGuard: PlanGuardService,
   ) {}
@@ -91,13 +100,29 @@ export class BookingsService {
     const booking =
       (await this.prisma.booking.findUnique({
         where: { id: created.id },
-        include: { technician: true },
+        include: { technician: true, salon: true, service: true },
       })) ?? created;
 
-    await this.notifications.enqueueBookingCreated({
+    // Fire-and-forget queue (for email/other channels)
+    this.notifications.enqueueBookingCreated({
       bookingId: booking.id,
       idempotencyKey: `${booking.id}-created`,
-    });
+    }).catch(() => {/* non-fatal */});
+
+    // Send SMS directly — bypass Redis queue for reliability
+    if (booking.guestPhone) {
+      const salonName = (booking as any).salon?.name ?? 'the salon';
+      const serviceName = (booking as any).service?.name ?? 'your service';
+      const guestName = booking.guestName ?? 'Customer';
+      const msg = [
+        `Hi ${guestName},`,
+        `Your ${serviceName} booking is confirmed.`,
+        `Date: ${fmtDate(booking.startAt)}`,
+        `Time: ${fmtTime(booking.startAt)}`,
+        salonName,
+      ].join('\n');
+      this.sms.sendBulkSms([booking.guestPhone], msg).catch(() => {/* non-fatal */});
+    }
 
     return booking;
   }
@@ -133,10 +158,25 @@ export class BookingsService {
 
     const updated = await this.bookingsRepository.updateStatus(bookingId, nextStatus);
 
-    await this.notifications.enqueueBookingStatusUpdated({
+    // Fire-and-forget queue (for email/other channels)
+    this.notifications.enqueueBookingStatusUpdated({
       bookingId: updated.id,
       idempotencyKey: `${updated.id}-status-${nextStatus}`,
-    });
+    }).catch(() => {/* non-fatal */});
+
+    // Send cancellation SMS directly — bypass Redis queue for reliability
+    if (nextStatus === BookingStatus.CANCELLED && booking.guestPhone) {
+      const salonName = booking.salon?.name ?? 'the salon';
+      const guestName = booking.guestName ?? 'Customer';
+      const msg = [
+        `Hi ${guestName},`,
+        `Your booking at ${salonName} has been cancelled.`,
+        `Date: ${fmtDate(booking.startAt)}`,
+        `Time: ${fmtTime(booking.startAt)}`,
+        `Please contact us to rebook.`,
+      ].join('\n');
+      this.sms.sendBulkSms([booking.guestPhone], msg).catch(() => {/* non-fatal */});
+    }
 
     return updated;
   }
