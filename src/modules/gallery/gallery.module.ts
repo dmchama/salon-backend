@@ -8,5 +8,6 @@ import { CloudinaryService } from './cloudinary.service';
   imports: [PlanGuardModule],
   controllers: [GalleryController],
   providers: [GalleryService, CloudinaryService],
+  exports: [CloudinaryService],
 })
 export class GalleryModule {}

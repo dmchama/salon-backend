@@ -121,8 +121,10 @@ model Salon {
   contactPhone   String?     @map("contact_phone")
   contactEmail   String?     @map("contact_email")
   websiteUrl     String?     @map("website_url")
-  businessHours  Json?       @map("business_hours")
-  status         SalonStatus @default(DRAFT)
+  businessHours    Json?       @map("business_hours")
+  coverImageUrl    String?     @map("cover_image_url") @db.Text
+  listingImageUrl  String?     @map("listing_image_url") @db.Text
+  status           SalonStatus @default(DRAFT)
   isDefault      Boolean     @default(false) @map("is_default")
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")

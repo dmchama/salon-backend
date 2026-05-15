@@ -22,4 +22,16 @@ export class CloudinaryService {
         .end(buffer);
     });
   }
+
+  /** Extract public_id from a Cloudinary secure_url and delete the asset. Silently ignores failures. */
+  async deleteByUrl(url: string): Promise<void> {
+    try {
+      // URL format: https://res.cloudinary.com/<cloud>/image/upload/v<ver>/<public_id>.<ext>
+      const match = url.match(/\/image\/upload\/(?:v\d+\/)?(.+)\.[^.]+$/);
+      if (!match) return;
+      await cloudinary.uploader.destroy(match[1], { resource_type: 'image' });
+    } catch {
+      // Non-fatal — old asset stays on Cloudinary but doesn't break the upload
+    }
+  }
 }

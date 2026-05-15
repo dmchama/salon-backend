@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, Role, SalonStatus } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { PlanGuardService } from '../plan-guard/plan-guard.service';
+import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { CloudinaryService } from '../gallery/cloudinary.service';
 import { SalonsRepository } from './repositories/salons.repository';
 import { CreateSalonDto } from './dto/create-salon.dto';
 import { UpdateSalonDto } from './dto/update-salon.dto';
@@ -11,6 +13,8 @@ export class SalonsService {
   constructor(
     private readonly salonsRepository: SalonsRepository,
     private readonly planGuard: PlanGuardService,
+    private readonly prisma: PrismaService,
+    private readonly cloudinary: CloudinaryService,
   ) {}
 
   async create(dto: CreateSalonDto, ownerId: string, role: Role) {
@@ -120,5 +124,43 @@ export class SalonsService {
       throw new DomainException('NOT_FOUND', 'Salon not found', 404);
     }
     return this.salonsRepository.setDefault(ownerId, salonId);
+  }
+
+  async setListingImage(salonId: string, file: Express.Multer.File, ownerId: string, role: Role) {
+    if (role !== Role.SALON_ADMIN) {
+      throw new DomainException('FORBIDDEN', 'Only owners can set a listing image', 403);
+    }
+    const salon = await this.salonsRepository.findById(salonId);
+    if (!salon || salon.ownerId !== ownerId) {
+      throw new DomainException('NOT_FOUND', 'Salon not found', 404);
+    }
+    if (salon.listingImageUrl) {
+      await this.cloudinary.deleteByUrl(salon.listingImageUrl);
+    }
+    const url = await this.cloudinary.uploadImage(file.buffer, 'salon-listing');
+    return this.salonsRepository.update(salonId, { listingImageUrl: url });
+  }
+
+  async setCoverImage(salonId: string, galleryItemId: string | null | undefined, ownerId: string, role: Role) {
+    if (role !== Role.SALON_ADMIN) {
+      throw new DomainException('FORBIDDEN', 'Only owners can set a cover image', 403);
+    }
+    const salon = await this.salonsRepository.findById(salonId);
+    if (!salon || salon.ownerId !== ownerId) {
+      throw new DomainException('NOT_FOUND', 'Salon not found', 404);
+    }
+
+    if (!galleryItemId) {
+      return this.salonsRepository.update(salonId, { coverImageUrl: null });
+    }
+
+    const item = await this.prisma.galleryItem.findFirst({
+      where: { id: galleryItemId, salonId },
+    });
+    if (!item) {
+      throw new DomainException('NOT_FOUND', 'Gallery item not found in this salon', 404);
+    }
+
+    return this.salonsRepository.update(salonId, { coverImageUrl: item.url });
   }
 }
