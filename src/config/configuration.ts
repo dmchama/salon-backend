@@ -17,4 +17,9 @@ export default () => ({
     .map((s) => s.trim())
     .filter(Boolean),
   logLevel: process.env.LOG_LEVEL ?? 'info',
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME ?? '',
+    apiKey: process.env.CLOUDINARY_API_KEY ?? '',
+    apiSecret: process.env.CLOUDINARY_API_SECRET ?? '',
+  },
 });

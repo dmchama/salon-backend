@@ -3,32 +3,34 @@ import { Role } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { PlanGuardService } from '../plan-guard/plan-guard.service';
-import { CreateGalleryItemDto } from './dto/create-gallery-item.dto';
+import { CloudinaryService } from './cloudinary.service';
 
 @Injectable()
 export class GalleryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly planGuard: PlanGuardService,
+    private readonly cloudinary: CloudinaryService,
   ) {}
 
-  async addItem(dto: CreateGalleryItemDto, ownerId: string, role: Role) {
+  async addItemFromUpload(
+    file: Express.Multer.File,
+    salonId: string,
+    caption: string | undefined,
+    ownerId: string,
+    role: Role,
+  ) {
     if (role !== Role.SALON_ADMIN) {
       throw new DomainException('FORBIDDEN', 'Only owners manage gallery', 403);
     }
-    const salon = await this.prisma.salon.findFirst({
-      where: { id: dto.salonId, ownerId },
-    });
-    if (!salon) {
-      throw new DomainException('NOT_FOUND', 'Salon not found', 404);
-    }
-    await this.planGuard.checkGalleryLimit(ownerId, dto.salonId);
+    const salon = await this.prisma.salon.findFirst({ where: { id: salonId, ownerId } });
+    if (!salon) throw new DomainException('NOT_FOUND', 'Salon not found', 404);
+    await this.planGuard.checkGalleryLimit(ownerId, salonId);
+
+    const url = await this.cloudinary.uploadImage(file.buffer, 'salon-gallery');
+
     return this.prisma.galleryItem.create({
-      data: {
-        salonId: dto.salonId,
-        url: dto.url,
-        caption: dto.caption,
-      },
+      data: { salonId, url, caption },
     });
   }
 

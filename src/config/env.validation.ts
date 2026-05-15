@@ -12,4 +12,7 @@ export const envValidationSchema = Joi.object({
   JWT_EXPIRES_IN: Joi.string().default('15m'),
   LOG_LEVEL: Joi.string().default('info'),
   CORS_ORIGINS: Joi.string().allow('').optional(),
+  CLOUDINARY_CLOUD_NAME: Joi.string().required(),
+  CLOUDINARY_API_KEY: Joi.string().required(),
+  CLOUDINARY_API_SECRET: Joi.string().required(),
 });
