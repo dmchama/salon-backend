@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { BookingStatus, Role } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { PlanGuardService } from '../plan-guard/plan-guard.service';
@@ -19,6 +19,7 @@ function fmtTime(d: Date): string {
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly bookingsRepository: BookingsRepository,
@@ -118,6 +119,7 @@ export class BookingsService {
     }).catch(() => {/* non-fatal */});
 
     // Send SMS directly — bypass Redis queue for reliability
+    this.logger.log(`Booking ${created.id} — guestPhone=${booking.guestPhone ?? 'NONE'}`);
     if (booking.guestPhone) {
       const salonName = (booking as any).salon?.name as string | undefined;
       const serviceName = (booking as any).service?.name as string | undefined;

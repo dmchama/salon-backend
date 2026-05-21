@@ -9,14 +9,15 @@ export class SmslenzService {
   private readonly senderId: string;
 
   constructor(private readonly config: ConfigService) {
-    this.userId = this.config.get<string>('smslenz.userId') ?? '';
-    this.apiKey = this.config.get<string>('smslenz.apiKey') ?? '';
-    this.senderId = this.config.get<string>('smslenz.senderId') ?? 'SMSlenzDEMO';
+    this.userId = this.config.get<string>('smslenz.userId') ?? process.env.SMSLENZ_USER_ID ?? '';
+    this.apiKey = this.config.get<string>('smslenz.apiKey') ?? process.env.SMSLENZ_API_KEY ?? '';
+    this.senderId = this.config.get<string>('smslenz.senderId') ?? process.env.SMSLENZ_SENDER_ID ?? 'SMSlenzDEMO';
+    this.logger.log(`SmslenzService ready — userId=${this.userId ? 'set' : 'MISSING'} apiKey=${this.apiKey ? 'set' : 'MISSING'} senderId=${this.senderId}`);
   }
 
   async sendBulkSms(contacts: string[], message: string): Promise<void> {
     if (!this.userId || !this.apiKey || contacts.length === 0) {
-      this.logger.debug('SMS skipped: no credentials or empty contacts');
+      this.logger.warn(`SMS skipped — userId=${this.userId ? 'set' : 'MISSING'} apiKey=${this.apiKey ? 'set' : 'MISSING'} contacts=${contacts.length}`);
       return;
     }
     try {
