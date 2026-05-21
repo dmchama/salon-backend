@@ -20,6 +20,7 @@ function fmtTime(d: Date): string {
 @Injectable()
 export class BookingsService {
   private readonly logger = new Logger(BookingsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly bookingsRepository: BookingsRepository,
@@ -31,27 +32,38 @@ export class BookingsService {
 
   /** Public guest booking (no account). */
   async create(dto: CreateBookingDto) {
+    this.logger.log(
+      `[create] START guest="${dto.guestName}" phone=${dto.guestPhone} ` +
+      `salon=${dto.salonId} service=${dto.serviceId} slot=${dto.startAt}`,
+    );
+
     const salon = await this.prisma.salon.findFirst({
       where: { id: dto.salonId, status: 'PUBLISHED' },
       include: { owner: { select: { id: true } } },
     });
     if (!salon) {
+      this.logger.warn(`[create] FAIL salon not found or not published: ${dto.salonId}`);
       throw new DomainException('SALON_NOT_FOUND', 'Salon not available', 404);
     }
+    this.logger.log(`[create] Salon found: "${salon.name}" owner=${salon.owner.id}`);
 
     await this.planGuard.requireActiveSubscription(salon.owner.id);
     const isOverage = await this.planGuard.isBookingOverage(salon.owner.id);
+    this.logger.log(`[create] Plan guard passed — isOverage=${isOverage}`);
 
     const service = await this.prisma.service.findFirst({
       where: { id: dto.serviceId, salonId: dto.salonId, active: true },
     });
     if (!service) {
+      this.logger.warn(`[create] FAIL service not found: ${dto.serviceId}`);
       throw new DomainException('SERVICE_NOT_FOUND', 'Service not found for this salon', 404);
     }
+    this.logger.log(`[create] Service found: "${service.name}" (${service.durationMin} min)`);
 
     const startAt = new Date(dto.startAt);
     const endAt = new Date(startAt.getTime() + service.durationMin * 60 * 1000);
     assertValidBookingWindow(startAt, endAt);
+    this.logger.log(`[create] Slot: ${fmtDate(startAt)} ${fmtTime(startAt)} → ${fmtTime(endAt)}`);
 
     let technicianConnect: { connect: { id: string } } | undefined;
     if (dto.technicianId) {
@@ -59,20 +71,24 @@ export class BookingsService {
         where: { id: dto.technicianId, salonId: dto.salonId, active: true },
       });
       if (!tech) {
+        this.logger.warn(`[create] FAIL technician not found: ${dto.technicianId}`);
         throw new DomainException('TECHNICIAN_NOT_FOUND', 'Technician not available for this salon', 404);
       }
       technicianConnect = { connect: { id: tech.id } };
+      this.logger.log(`[create] Technician: "${tech.name}" (${tech.id})`);
     }
 
     let appliedPromo: { id: string; discountPct: number } | undefined;
     if (dto.promoCode) {
       const promo = await this.promoCodes.validate(dto.promoCode, dto.salonId, dto.serviceId);
       appliedPromo = { id: promo.id, discountPct: promo.discountPct };
+      this.logger.log(`[create] Promo applied: "${dto.promoCode}" ${promo.discountPct}% off`);
     }
 
     // Serializable transaction: overlap check + insert are atomic.
     // Concurrent requests for the same slot will queue at the DB level —
     // only the first one commits, the second sees the overlap and throws.
+    this.logger.log(`[create] Opening serializable transaction…`);
     const created = await this.prisma.$transaction(async (tx) => {
       const overlap = await tx.booking.findFirst({
         where: {
@@ -82,6 +98,7 @@ export class BookingsService {
         },
       });
       if (overlap) {
+        this.logger.warn(`[create] FAIL slot overlap with booking ${overlap.id}`);
         throw new DomainException('SLOT_TAKEN', 'Selected time slot is not available', 409);
       }
       return tx.booking.create({
@@ -101,9 +118,11 @@ export class BookingsService {
         },
       });
     }, { isolationLevel: 'Serializable' });
+    this.logger.log(`[create] Booking created id=${created.id} status=CONFIRMED`);
 
     if (appliedPromo) {
       await this.promoCodes.incrementUsage(appliedPromo.id);
+      this.logger.log(`[create] Promo usage incremented: ${appliedPromo.id}`);
     }
 
     const booking =
@@ -113,14 +132,16 @@ export class BookingsService {
       })) ?? created;
 
     // Fire-and-forget queue (for email/other channels)
+    this.logger.log(`[create] Enqueuing notification for booking ${booking.id}`);
     this.notifications.enqueueBookingCreated({
       bookingId: booking.id,
       idempotencyKey: `${booking.id}-created`,
-    }).catch(() => {/* non-fatal */});
+    }).catch((err) => this.logger.warn(`[create] Notification queue error: ${err?.message}`));
 
     // Send SMS directly — bypass Redis queue for reliability
-    this.logger.log(`Booking ${created.id} — guestPhone=${booking.guestPhone ?? 'NONE'}`);
-    if (booking.guestPhone) {
+    const guestPhone = booking.guestPhone;
+    this.logger.log(`[create] SMS check — guestPhone=${guestPhone ?? 'NONE'}`);
+    if (guestPhone) {
       const salonName = (booking as any).salon?.name as string | undefined;
       const serviceName = (booking as any).service?.name as string | undefined;
       const salonCity = (booking as any).salon?.city as string | undefined;
@@ -135,9 +156,15 @@ export class BookingsService {
       if (salonName) lines.push(salonName);
       if (salonCity) lines.push(salonCity);
       if (salonPhone) lines.push(`Contact: ${salonPhone}`);
-      this.sms.sendBulkSms([booking.guestPhone], lines.join('\n')).catch(() => {/* non-fatal */});
+      this.logger.log(`[create] Sending confirmation SMS to ${guestPhone} (${lines.length} lines)`);
+      this.sms.sendBulkSms([guestPhone], lines.join('\n')).catch((err) =>
+        this.logger.warn(`[create] SMS send error: ${err?.message}`),
+      );
+    } else {
+      this.logger.warn(`[create] No guestPhone — SMS skipped`);
     }
 
+    this.logger.log(`[create] DONE booking=${booking.id}`);
     return booking;
   }
 
@@ -147,39 +174,49 @@ export class BookingsService {
     actorId: string,
     actorRole: Role,
   ) {
+    this.logger.log(`[updateStatus] START booking=${bookingId} nextStatus=${nextStatus} actor=${actorId} role=${actorRole}`);
+
     const booking = await this.bookingsRepository.findByIdWithRelations(bookingId);
     if (!booking) {
+      this.logger.warn(`[updateStatus] FAIL booking not found: ${bookingId}`);
       throw new DomainException('NOT_FOUND', 'Booking not found', 404);
     }
+    this.logger.log(`[updateStatus] Found: currentStatus=${booking.status} salon=${booking.salon?.name}`);
 
     if (actorRole === Role.SUPER_ADMIN) {
       // full access
     } else if (actorRole === Role.SALON_ADMIN) {
       if (booking.salon.ownerId !== actorId) {
+        this.logger.warn(`[updateStatus] FAIL forbidden — actor ${actorId} does not own salon`);
         throw new DomainException('FORBIDDEN', 'Not your salon booking', 403);
       }
     } else {
+      this.logger.warn(`[updateStatus] FAIL forbidden — role ${actorRole} cannot update bookings`);
       throw new DomainException('FORBIDDEN', 'Cannot update booking', 403);
     }
 
     if (!canTransitionStatus(booking.status, nextStatus)) {
+      this.logger.warn(`[updateStatus] FAIL invalid transition ${booking.status} → ${nextStatus}`);
       throw new DomainException('INVALID_STATUS', 'Invalid status transition', 400);
     }
 
     if (booking.status === nextStatus) {
+      this.logger.log(`[updateStatus] No-op: already ${nextStatus}`);
       return booking;
     }
 
     const updated = await this.bookingsRepository.updateStatus(bookingId, nextStatus);
+    this.logger.log(`[updateStatus] Status updated: ${booking.status} → ${nextStatus}`);
 
     // Fire-and-forget queue (for email/other channels)
     this.notifications.enqueueBookingStatusUpdated({
       bookingId: updated.id,
       idempotencyKey: `${updated.id}-status-${nextStatus}`,
-    }).catch(() => {/* non-fatal */});
+    }).catch((err) => this.logger.warn(`[updateStatus] Notification queue error: ${err?.message}`));
 
     // Send cancellation SMS directly — bypass Redis queue for reliability
     if (nextStatus === BookingStatus.CANCELLED && booking.guestPhone) {
+      this.logger.log(`[updateStatus] Sending cancellation SMS to ${booking.guestPhone}`);
       const salonName = booking.salon?.name ?? 'the salon';
       const salonPhone = booking.salon?.contactPhone;
       const guestName = booking.guestName ?? 'Customer';
@@ -190,9 +227,12 @@ export class BookingsService {
         `Time: ${fmtTime(booking.startAt)}`,
         salonPhone ? `To rebook, call us: ${salonPhone}` : `Please contact us to rebook.`,
       ].join('\n');
-      this.sms.sendBulkSms([booking.guestPhone], msg).catch(() => {/* non-fatal */});
+      this.sms.sendBulkSms([booking.guestPhone], msg).catch((err) =>
+        this.logger.warn(`[updateStatus] SMS send error: ${err?.message}`),
+      );
     }
 
+    this.logger.log(`[updateStatus] DONE booking=${bookingId}`);
     return updated;
   }
 
@@ -211,8 +251,11 @@ export class BookingsService {
   }
 
   async reschedule(bookingId: string, startAtIso: string, actorId: string, actorRole: Role) {
+    this.logger.log(`[reschedule] START booking=${bookingId} newSlot=${startAtIso} actor=${actorId}`);
+
     const booking = await this.bookingsRepository.findByIdWithRelations(bookingId);
     if (!booking) {
+      this.logger.warn(`[reschedule] FAIL booking not found: ${bookingId}`);
       throw new DomainException('NOT_FOUND', 'Booking not found', 404);
     }
     if (actorRole === Role.SALON_ADMIN && booking.salon.ownerId !== actorId) {
@@ -222,12 +265,14 @@ export class BookingsService {
       throw new DomainException('FORBIDDEN', 'Cannot reschedule', 403);
     }
     if (booking.status === BookingStatus.CANCELLED || booking.status === BookingStatus.COMPLETED) {
+      this.logger.warn(`[reschedule] FAIL cannot reschedule status=${booking.status}`);
       throw new DomainException('INVALID_STATUS', 'Cannot reschedule this booking', 400);
     }
 
     const startAt = new Date(startAtIso);
     const endAt = new Date(startAt.getTime() + booking.service.durationMin * 60 * 1000);
     assertValidBookingWindow(startAt, endAt);
+    this.logger.log(`[reschedule] New slot: ${fmtDate(startAt)} ${fmtTime(startAt)} → ${fmtTime(endAt)}`);
 
     const overlap = await this.bookingsRepository.hasOverlappingBooking(
       booking.salonId,
@@ -236,9 +281,12 @@ export class BookingsService {
       bookingId,
     );
     if (overlap) {
+      this.logger.warn(`[reschedule] FAIL slot overlap`);
       throw new DomainException('SLOT_TAKEN', 'Selected time slot is not available', 409);
     }
 
-    return this.bookingsRepository.updateSchedule(bookingId, startAt, endAt);
+    const result = await this.bookingsRepository.updateSchedule(bookingId, startAt, endAt);
+    this.logger.log(`[reschedule] DONE booking=${bookingId}`);
+    return result;
   }
 }

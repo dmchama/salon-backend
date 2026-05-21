@@ -39,6 +39,34 @@ import { HealthController } from './health/health.controller';
       useFactory: (config: ConfigService) => ({
         pinoHttp: {
           level: config.get<string>('logLevel') ?? 'info',
+          transport:
+            config.get<string>('nodeEnv') !== 'production'
+              ? { target: 'pino-pretty', options: { colorize: true, singleLine: true } }
+              : undefined,
+          serializers: {
+            req(req: any) {
+              return { method: req.method, url: req.url };
+            },
+            res(res: any) {
+              return { statusCode: res.statusCode };
+            },
+          },
+          customProps(req: any) {
+            const body = req.body as Record<string, unknown> | undefined;
+            if (!body || Object.keys(body).length === 0) return {};
+            const safe: Record<string, unknown> = {};
+            for (const key of Object.keys(body)) {
+              if (/password|secret|token|key/i.test(key)) safe[key] = '***';
+              else safe[key] = body[key];
+            }
+            return { reqBody: safe };
+          },
+          customSuccessMessage(req: any, res: any, ms: number) {
+            return `${req.method} ${req.url} ${res.statusCode} — ${ms}ms`;
+          },
+          customErrorMessage(req: any, res: any, err: Error) {
+            return `${req.method} ${req.url} ${res.statusCode} — ${err.message}`;
+          },
         },
       }),
     }),
