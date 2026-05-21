@@ -35,15 +35,17 @@ export class NotificationDispatcherService {
     salonName: string,
     serviceName: string,
     startAt: Date,
+    salonPhone?: string,
   ): Promise<void> {
-    const message = [
+    const lines = [
       `Hi ${guestName},`,
       `Your ${serviceName} booking is confirmed.`,
       `Date: ${fmtDate(startAt)}`,
       `Time: ${fmtTime(startAt)}`,
       salonName,
-    ].join('\n');
-    await this.sms.sendBulkSms([phone], message);
+    ];
+    if (salonPhone) lines.push(`Contact: ${salonPhone}`);
+    await this.sms.sendBulkSms([phone], lines.join('\n'));
   }
 
   async dispatchBookingCancellationSms(
@@ -51,13 +53,14 @@ export class NotificationDispatcherService {
     guestName: string,
     salonName: string,
     startAt: Date,
+    salonPhone?: string,
   ): Promise<void> {
     const message = [
       `Hi ${guestName},`,
       `Your booking at ${salonName} has been cancelled.`,
       `Date: ${fmtDate(startAt)}`,
       `Time: ${fmtTime(startAt)}`,
-      `Please contact us to rebook.`,
+      salonPhone ? `To rebook, call us: ${salonPhone}` : `Please contact us to rebook.`,
     ].join('\n');
     await this.sms.sendBulkSms([phone], message);
   }

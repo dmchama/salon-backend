@@ -211,7 +211,14 @@ export class SalonOwnersService {
     const { customers } = await this.getOwnerCampaignCustomers(ownerId, body.salonId, body.segment);
     const phones = customers.map((c) => c.phone).filter(Boolean);
     if (phones.length > 0) {
-      await this.sms.sendBulkSms(phones, body.message);
+      const frontendUrl = process.env.FRONTEND_URL ?? '';
+      const bookingLink = `${frontendUrl}/book/${salon.slug}?promo=${promo.code}`;
+      const fullMessage = [
+        body.message,
+        `\n${salon.name}`,
+        `Book now: ${bookingLink}`,
+      ].join('\n');
+      await this.sms.sendBulkSms(phones, fullMessage);
     }
 
     return {

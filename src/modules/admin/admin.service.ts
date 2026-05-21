@@ -518,11 +518,18 @@ export class AdminService {
       bookings.forEach((b) => { if (b.guestPhone) counts.set(b.guestPhone, (counts.get(b.guestPhone) ?? 0) + 1); });
       phones = phones.filter((p) => (counts.get(p) ?? 0) >= 2);
     }
+    const salon = await this.prisma.salon.findUnique({ where: { id: req.salonId } });
     if (phones.length > 0 && req.message) {
-      await this.sms.sendBulkSms(phones, req.message);
+      const frontendUrl = process.env.FRONTEND_URL ?? '';
+      const bookingLink = salon ? `${frontendUrl}/book/${salon.slug}?promo=${promo.code}` : '';
+      const fullMessage = [
+        req.message,
+        ...(salon?.name ? [`\n${salon.name}`] : []),
+        ...(bookingLink ? [`Book now: ${bookingLink}`] : []),
+      ].join('\n');
+      await this.sms.sendBulkSms(phones, fullMessage);
     }
 
-    const salon = await this.prisma.salon.findUnique({ where: { id: req.salonId } });
     return { message: 'Campaign approved and SMS sent', promoCode: promo.code, salonSlug: salon?.slug ?? '', recipientCount: phones.length };
   }
 

@@ -52,15 +52,6 @@ export class BookingsService {
     const endAt = new Date(startAt.getTime() + service.durationMin * 60 * 1000);
     assertValidBookingWindow(startAt, endAt);
 
-    const overlap = await this.bookingsRepository.hasOverlappingBooking(
-      dto.salonId,
-      startAt,
-      endAt,
-    );
-    if (overlap) {
-      throw new DomainException('SLOT_TAKEN', 'Selected time slot is not available', 409);
-    }
-
     let technicianConnect: { connect: { id: string } } | undefined;
     if (dto.technicianId) {
       const tech = await this.prisma.technician.findFirst({
@@ -78,20 +69,37 @@ export class BookingsService {
       appliedPromo = { id: promo.id, discountPct: promo.discountPct };
     }
 
-    const created = await this.bookingsRepository.create({
-      salon: { connect: { id: dto.salonId } },
-      service: { connect: { id: dto.serviceId } },
-      ...(technicianConnect ? { technician: technicianConnect } : {}),
-      ...(appliedPromo ? { promoCode: { connect: { id: appliedPromo.id } }, discountPct: appliedPromo.discountPct } : {}),
-      startAt,
-      endAt,
-      status: BookingStatus.CONFIRMED,
-      isOverage,
-      guestName: dto.guestName.trim(),
-      guestEmail: dto.guestEmail.trim().toLowerCase(),
-      guestPhone: dto.guestPhone.trim(),
-      notes: dto.notes?.trim() || null,
-    });
+    // Serializable transaction: overlap check + insert are atomic.
+    // Concurrent requests for the same slot will queue at the DB level —
+    // only the first one commits, the second sees the overlap and throws.
+    const created = await this.prisma.$transaction(async (tx) => {
+      const overlap = await tx.booking.findFirst({
+        where: {
+          salonId: dto.salonId,
+          status: { not: BookingStatus.CANCELLED },
+          AND: [{ startAt: { lt: endAt } }, { endAt: { gt: startAt } }],
+        },
+      });
+      if (overlap) {
+        throw new DomainException('SLOT_TAKEN', 'Selected time slot is not available', 409);
+      }
+      return tx.booking.create({
+        data: {
+          salon: { connect: { id: dto.salonId } },
+          service: { connect: { id: dto.serviceId } },
+          ...(technicianConnect ? { technician: technicianConnect } : {}),
+          ...(appliedPromo ? { promoCode: { connect: { id: appliedPromo.id } }, discountPct: appliedPromo.discountPct } : {}),
+          startAt,
+          endAt,
+          status: BookingStatus.CONFIRMED,
+          isOverage,
+          guestName: dto.guestName.trim(),
+          guestEmail: dto.guestEmail.trim().toLowerCase(),
+          guestPhone: dto.guestPhone.trim(),
+          notes: dto.notes?.trim() || null,
+        },
+      });
+    }, { isolationLevel: 'Serializable' });
 
     if (appliedPromo) {
       await this.promoCodes.incrementUsage(appliedPromo.id);
@@ -111,17 +119,21 @@ export class BookingsService {
 
     // Send SMS directly — bypass Redis queue for reliability
     if (booking.guestPhone) {
-      const salonName = (booking as any).salon?.name ?? 'the salon';
-      const serviceName = (booking as any).service?.name ?? 'your service';
+      const salonName = (booking as any).salon?.name as string | undefined;
+      const serviceName = (booking as any).service?.name as string | undefined;
+      const salonCity = (booking as any).salon?.city as string | undefined;
+      const salonPhone = (booking as any).salon?.contactPhone as string | undefined;
       const guestName = booking.guestName ?? 'Customer';
-      const msg = [
+      const lines = [
         `Hi ${guestName},`,
-        `Your ${serviceName} booking is confirmed.`,
+        serviceName ? `Your ${serviceName} booking is confirmed.` : `Your booking is confirmed.`,
         `Date: ${fmtDate(booking.startAt)}`,
         `Time: ${fmtTime(booking.startAt)}`,
-        salonName,
-      ].join('\n');
-      this.sms.sendBulkSms([booking.guestPhone], msg).catch(() => {/* non-fatal */});
+      ];
+      if (salonName) lines.push(salonName);
+      if (salonCity) lines.push(salonCity);
+      if (salonPhone) lines.push(`Contact: ${salonPhone}`);
+      this.sms.sendBulkSms([booking.guestPhone], lines.join('\n')).catch(() => {/* non-fatal */});
     }
 
     return booking;
@@ -167,13 +179,14 @@ export class BookingsService {
     // Send cancellation SMS directly — bypass Redis queue for reliability
     if (nextStatus === BookingStatus.CANCELLED && booking.guestPhone) {
       const salonName = booking.salon?.name ?? 'the salon';
+      const salonPhone = booking.salon?.contactPhone;
       const guestName = booking.guestName ?? 'Customer';
       const msg = [
         `Hi ${guestName},`,
         `Your booking at ${salonName} has been cancelled.`,
         `Date: ${fmtDate(booking.startAt)}`,
         `Time: ${fmtTime(booking.startAt)}`,
-        `Please contact us to rebook.`,
+        salonPhone ? `To rebook, call us: ${salonPhone}` : `Please contact us to rebook.`,
       ].join('\n');
       this.sms.sendBulkSms([booking.guestPhone], msg).catch(() => {/* non-fatal */});
     }
