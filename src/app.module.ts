@@ -22,6 +22,7 @@ import { GalleryModule } from './modules/gallery/gallery.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { SearchModule } from './modules/search/search.module';
+import { SitemapModule } from './modules/sitemap/sitemap.module';
 import { TechniciansModule } from './modules/technicians/technicians.module';
 import { PromoCodesModule } from './modules/promo-codes/promo-codes.module';
 import { HealthController } from './health/health.controller';
@@ -100,6 +101,7 @@ import { HealthController } from './health/health.controller';
     GalleryModule,
     AdminModule,
     SearchModule,
+    SitemapModule,
     TechniciansModule,
     PromoCodesModule,
   ],

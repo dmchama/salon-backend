@@ -22,7 +22,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.setGlobalPrefix(config.apiPrefix);
+  app.setGlobalPrefix(config.apiPrefix, { exclude: ['sitemap.xml'] });
   app.enableVersioning({
     type: VersioningType.URI,
     defaultVersion: '1',
