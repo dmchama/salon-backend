@@ -521,7 +521,7 @@ export class AdminService {
     const salon = await this.prisma.salon.findUnique({ where: { id: req.salonId } });
     if (phones.length > 0 && req.message) {
       const frontendUrl = process.env.FRONTEND_URL ?? '';
-      const bookingLink = salon ? `${frontendUrl}/book/${salon.slug}?promo=${promo.code}` : '';
+      const bookingLink = salon ? `${frontendUrl}/booking/${salon.slug}?promo=${promo.code}` : '';
       const fullMessage = [
         req.message,
         ...(salon?.name ? [`\n${salon.name}`] : []),

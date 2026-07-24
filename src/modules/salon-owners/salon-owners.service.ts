@@ -212,7 +212,7 @@ export class SalonOwnersService {
     const phones = customers.map((c) => c.phone).filter(Boolean);
     if (phones.length > 0) {
       const frontendUrl = process.env.FRONTEND_URL ?? '';
-      const bookingLink = `${frontendUrl}/book/${salon.slug}?promo=${promo.code}`;
+      const bookingLink = `${frontendUrl}/booking/${salon.slug}?promo=${promo.code}`;
       const fullMessage = [
         body.message,
         `\n${salon.name}`,
