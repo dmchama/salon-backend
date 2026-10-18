@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Public } from '../../common/decorators/public.decorator';
@@ -7,6 +7,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { BookingsService } from './bookings.service';
+import { AvailabilityQueryDto } from './dto/availability-query.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
 
@@ -19,6 +20,12 @@ export class BookingsController {
   @Post()
   create(@Body() dto: CreateBookingDto) {
     return this.bookingsService.create(dto);
+  }
+
+  @Public()
+  @Get('availability')
+  availability(@Query() query: AvailabilityQueryDto) {
+    return this.bookingsService.getAvailability(query);
   }
 
   @ApiBearerAuth('access-token')

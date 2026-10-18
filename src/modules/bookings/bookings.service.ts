@@ -6,8 +6,22 @@ import { NotificationProducerService } from '../notifications/notification-produ
 import { SmslenzService } from '../notifications/providers/smslenz.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { assertValidBookingWindow, canTransitionStatus } from './domain/booking.policy';
+import {
+  BOOKING_HORIZON_DAYS,
+  MIN_NOTICE_MIN,
+  SLOT_INTERVAL_MIN,
+  addDays,
+  assertWithinBusinessHours,
+  colomboDateString,
+  dayHours,
+  dayWindowUtc,
+  formatDayHours,
+  generateDaySlots,
+  parseBusinessHours,
+} from './domain/availability.policy';
 import { BookingsRepository } from './repositories/bookings.repository';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { AvailabilityQueryDto } from './dto/availability-query.dto';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 
 function fmtDate(d: Date): string {
@@ -62,7 +76,8 @@ export class BookingsService {
 
     const startAt = new Date(dto.startAt);
     const endAt = new Date(startAt.getTime() + service.durationMin * 60 * 1000);
-    assertValidBookingWindow(startAt, endAt);
+    assertValidBookingWindow(startAt, endAt, new Date(), MIN_NOTICE_MIN);
+    assertWithinBusinessHours(startAt, endAt, salon.businessHours);
     this.logger.log(`[create] Slot: ${fmtDate(startAt)} ${fmtTime(startAt)} → ${fmtTime(endAt)}`);
 
     let technicianConnect: { connect: { id: string } } | undefined;
@@ -166,6 +181,94 @@ export class BookingsService {
 
     this.logger.log(`[create] DONE booking=${booking.id}`);
     return booking;
+  }
+
+  /** Public: free start times per day for a salon + service (feature 001). */
+  async getAvailability(query: AvailabilityQueryDto) {
+    this.logger.log(
+      `[getAvailability] START salon=${query.salonId} service=${query.serviceId} from=${query.from ?? 'today'} days=${query.days ?? BOOKING_HORIZON_DAYS}`,
+    );
+
+    const now = new Date();
+    const today = colomboDateString(now);
+    const from = query.from ?? today;
+    const days = query.days ?? BOOKING_HORIZON_DAYS;
+    const lastAllowed = addDays(today, BOOKING_HORIZON_DAYS - 1);
+    if (from < today || addDays(from, days - 1) > lastAllowed) {
+      this.logger.warn(
+        `[getAvailability] FAIL range ${from}+${days} outside ${today}..${lastAllowed}`,
+      );
+      throw new DomainException(
+        'INVALID_RANGE',
+        `Dates must be between ${today} and ${lastAllowed}`,
+        400,
+      );
+    }
+
+    const salon = await this.prisma.salon.findFirst({
+      where: { id: query.salonId, status: 'PUBLISHED' },
+      select: { id: true, businessHours: true },
+    });
+    if (!salon) {
+      this.logger.warn(
+        `[getAvailability] FAIL salon not found or not published: ${query.salonId}`,
+      );
+      throw new DomainException('SALON_NOT_FOUND', 'Salon not available', 404);
+    }
+    const service = await this.prisma.service.findFirst({
+      where: { id: query.serviceId, salonId: salon.id, active: true },
+      select: { durationMin: true },
+    });
+    if (!service) {
+      this.logger.warn(
+        `[getAvailability] FAIL service not found: ${query.serviceId}`,
+      );
+      throw new DomainException(
+        'SERVICE_NOT_FOUND',
+        'Service not found for this salon',
+        404,
+      );
+    }
+
+    const hours = parseBusinessHours(salon.businessHours);
+    const dates = Array.from({ length: days }, (_, i) => addDays(from, i));
+    const windows = dates
+      .map((d) => dayWindowUtc(d, hours))
+      .filter((w) => w !== null);
+    const busy = windows.length
+      ? await this.bookingsRepository.findBusyIntervals(
+          salon.id,
+          windows[0]!.openAt,
+          windows[windows.length - 1]!.closeAt,
+        )
+      : [];
+
+    const result = dates.map((date) => {
+      const h = dayHours(date, hours);
+      return {
+        date,
+        closed: h === null,
+        ...formatDayHours(h),
+        slots: generateDaySlots({
+          date,
+          hours,
+          durationMin: service.durationMin,
+          busy,
+          now,
+        }),
+      };
+    });
+
+    this.logger.log(
+      `[getAvailability] OK days=${result.length} busy=${busy.length} ` +
+        `openDays=${result.filter((d) => d.slots.length).length}`,
+    );
+    return {
+      timezone: 'Asia/Colombo',
+      slotIntervalMin: SLOT_INTERVAL_MIN,
+      serviceDurationMin: service.durationMin,
+      days: result,
+    };
   }
 
   async updateStatus(

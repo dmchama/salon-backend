@@ -45,6 +45,18 @@ export class BookingsRepository {
     return this.prisma.booking.update({ where: { id }, data: { startAt, endAt } });
   }
 
+  /** Busy times only — no guest data (feature 001, BR6). */
+  findBusyIntervals(salonId: string, fromUtc: Date, toUtc: Date) {
+    return this.prisma.booking.findMany({
+      where: {
+        salonId,
+        status: { not: BookingStatus.CANCELLED },
+        AND: [{ startAt: { lt: toUtc } }, { endAt: { gt: fromUtc } }],
+      },
+      select: { startAt: true, endAt: true },
+    });
+  }
+
   hasOverlappingBooking(salonId: string, startAt: Date, endAt: Date, excludeId?: string) {
     return this.prisma.booking.findFirst({
       where: {
