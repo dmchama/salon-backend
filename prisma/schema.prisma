@@ -236,6 +236,8 @@ model Technician {
   phone          String?
   email          String?
   specialization String?  @db.Text
+  /// Public team photo (Cloudinary URL). Feature 005.
+  photoUrl       String?  @map("photo_url") @db.Text
   active         Boolean  @default(true)
   sortOrder      Int      @default(0) @map("sort_order")
   createdAt      DateTime @default(now()) @map("created_at")

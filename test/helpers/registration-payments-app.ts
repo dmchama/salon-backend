@@ -34,11 +34,19 @@ export class FakeCloudinary {
     this.deleted.push(publicId);
   }
 
-  async uploadImage() {
-    return 'https://fake.cloudinary.test/image.png';
+  deletedUrls: string[] = [];
+
+  async uploadImage(_buffer: Buffer, folder: string) {
+    if (this.failNextUpload) {
+      this.failNextUpload = false;
+      throw new Error('cloudinary down');
+    }
+    return `https://fake.cloudinary.test/image/upload/v1/${folder}/fake-${++this.seq}.jpg`;
   }
 
-  async deleteByUrl() {}
+  async deleteByUrl(url: string) {
+    this.deletedUrls.push(url);
+  }
 }
 
 export const notificationsSpy = {
