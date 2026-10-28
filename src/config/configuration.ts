@@ -22,6 +22,8 @@ export default () => ({
     apiKey: process.env.CLOUDINARY_API_KEY ?? '',
     apiSecret: process.env.CLOUDINARY_API_SECRET ?? '',
   },
+  /** Feature 002: reject SALON_ADMIN registration without a payment receipt. Turn on after the new frontend is live. */
+  registrationReceiptRequired: process.env.REGISTRATION_RECEIPT_REQUIRED === 'true',
   smslenz: {
     userId: process.env.SMSLENZ_USER_ID ?? '',
     apiKey: process.env.SMSLENZ_API_KEY ?? '',

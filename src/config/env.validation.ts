@@ -15,6 +15,7 @@ export const envValidationSchema = Joi.object({
   CLOUDINARY_CLOUD_NAME: Joi.string().required(),
   CLOUDINARY_API_KEY: Joi.string().required(),
   CLOUDINARY_API_SECRET: Joi.string().required(),
+  REGISTRATION_RECEIPT_REQUIRED: Joi.string().valid('true', 'false').optional(),
   SMSLENZ_USER_ID: Joi.string().allow('').optional(),
   SMSLENZ_API_KEY: Joi.string().allow('').optional(),
   SMSLENZ_SENDER_ID: Joi.string().allow('').optional(),

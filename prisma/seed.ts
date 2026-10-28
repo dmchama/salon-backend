@@ -29,6 +29,7 @@ async function main() {
   await prisma.technician.deleteMany({});
   await prisma.salon.deleteMany({});
   await prisma.ownerSubscription.deleteMany({});
+  await prisma.registrationPayment.deleteMany({});
   await prisma.subscriptionPlan.deleteMany({});
   await prisma.user.deleteMany({});
 
@@ -248,6 +249,23 @@ async function main() {
     ],
   });
   console.log('  ✓ Bookings (22 across 3 salons, spread over 3 months)');
+
+  // ─── Payment details (feature 002) — mock values, replace in Admin → Website ─
+  await prisma.websiteSetting.upsert({
+    where: { key: 'paymentDetails' },
+    update: {},
+    create: {
+      key: 'paymentDetails',
+      value: {
+        bankName: 'Sample Bank PLC',
+        accountName: 'SaloonBooking (Pvt) Ltd — SAMPLE',
+        accountNumber: '0000 1111 2222',
+        branch: 'Colombo 03 (sample)',
+        instructions: 'SAMPLE DETAILS — do not pay. Use your email address as the payment reference.',
+      },
+    },
+  });
+  console.log('  ✓ Payment details (mock)');
 
   console.log('\n─────────────────────────────────────────────────────────────');
   console.log('Seed complete!  All passwords: password123');

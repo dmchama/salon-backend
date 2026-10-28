@@ -6,6 +6,7 @@ import { NOTIFICATIONS_QUEUE, NotificationJobName } from '../../common/constants
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import {
   BookingNotificationPayload,
+  RegistrationPaymentReviewedPayload,
   SubscriptionReminderPayload,
 } from './notification-producer.service';
 import { NotificationDispatcherService } from './notification-dispatcher.service';
@@ -31,6 +32,10 @@ export class NotificationProcessor extends WorkerHost {
         return;
       case NotificationJobName.SubscriptionExpiring:
         await this.handleSubscriptionExpiring(job.data as SubscriptionReminderPayload);
+        return;
+      case NotificationJobName.RegistrationPaymentApproved:
+      case NotificationJobName.RegistrationPaymentRejected:
+        await this.handleRegistrationPaymentReviewed(job.data as RegistrationPaymentReviewedPayload);
         return;
       default:
         this.logger.warn(`Unknown job name: ${job.name}`);
@@ -107,5 +112,27 @@ export class NotificationProcessor extends WorkerHost {
       sub.plan.name,
       sub.expiresAt,
     );
+  }
+
+  private async handleRegistrationPaymentReviewed(data: RegistrationPaymentReviewedPayload): Promise<void> {
+    const payment = await this.prisma.registrationPayment.findUnique({
+      where: { id: data.registrationPaymentId },
+      include: { owner: true },
+    });
+    if (!payment || payment.status === 'PENDING') {
+      this.logger.warn(`RegistrationPayment ${data.registrationPaymentId} not found or not reviewed`);
+      return;
+    }
+    const name = payment.owner.firstName ?? 'there';
+    if (payment.status === 'APPROVED') {
+      await this.dispatcher.dispatchRegistrationApproved(payment.owner.email, name, payment.owner.phone);
+    } else {
+      await this.dispatcher.dispatchRegistrationRejected(
+        payment.owner.email,
+        name,
+        payment.rejectionReason ?? '',
+        payment.owner.phone,
+      );
+    }
   }
 }

@@ -3,7 +3,7 @@ import { Prisma, Role, SalonStatus } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { PlanGuardService } from '../plan-guard/plan-guard.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
-import { CloudinaryService } from '../gallery/cloudinary.service';
+import { CloudinaryService } from '../../common/cloudinary/cloudinary.service';
 import { SalonsRepository } from './repositories/salons.repository';
 import { CreateSalonDto } from './dto/create-salon.dto';
 import { UpdateSalonDto } from './dto/update-salon.dto';
@@ -88,6 +88,7 @@ export class SalonsService {
     if (!salon || salon.ownerId !== ownerId) {
       throw new DomainException('NOT_FOUND', 'Salon not found', 404);
     }
+    await this.planGuard.requireApprovedAccount(ownerId);
     return this.salonsRepository.updateStatus(salonId, SalonStatus.PUBLISHED);
   }
 

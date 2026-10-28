@@ -13,6 +13,10 @@ export type SubscriptionReminderPayload = {
   idempotencyKey: string;
 };
 
+export type RegistrationPaymentReviewedPayload = {
+  registrationPaymentId: string;
+};
+
 @Injectable()
 export class NotificationProducerService {
   private readonly logger = new Logger(NotificationProducerService.name);
@@ -41,5 +45,20 @@ export class NotificationProducerService {
       removeOnComplete: true,
     });
     this.logger.debug(`Queued ${NotificationJobName.SubscriptionExpiring} ${payload.ownerSubscriptionId}`);
+  }
+
+  async enqueueRegistrationPaymentReviewed(
+    outcome: 'approved' | 'rejected',
+    payload: RegistrationPaymentReviewedPayload,
+  ): Promise<void> {
+    const name =
+      outcome === 'approved'
+        ? NotificationJobName.RegistrationPaymentApproved
+        : NotificationJobName.RegistrationPaymentRejected;
+    await this.queue.add(name, payload, {
+      jobId: `${name}.${payload.registrationPaymentId}`,
+      removeOnComplete: true,
+    });
+    this.logger.debug(`Queued ${name} ${payload.registrationPaymentId}`);
   }
 }

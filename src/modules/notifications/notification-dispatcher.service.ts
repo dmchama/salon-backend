@@ -85,6 +85,23 @@ export class NotificationDispatcherService {
     });
   }
 
+  async dispatchRegistrationApproved(email: string, name: string, phone: string | null): Promise<void> {
+    const body = `Hi ${name}, your SaloonBooking payment has been verified and your account is now active. You can publish your salon and accept bookings.`;
+    await this.email.send(email, { title: 'Your account is approved', body, metadata: {} });
+    if (phone) await this.sms.sendBulkSms([phone], body);
+  }
+
+  async dispatchRegistrationRejected(
+    email: string,
+    name: string,
+    reason: string,
+    phone: string | null,
+  ): Promise<void> {
+    const body = `Hi ${name}, we could not verify your SaloonBooking payment receipt. Reason: ${reason}. Please log in and upload a new receipt.`;
+    await this.email.send(email, { title: 'Payment receipt not accepted', body, metadata: { reason } });
+    if (phone) await this.sms.sendBulkSms([phone], body);
+  }
+
   async dispatchOverageInvoice(
     email: string,
     ownerName: string,

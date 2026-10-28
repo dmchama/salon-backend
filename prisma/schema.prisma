@@ -44,6 +44,12 @@ enum SmsCampaignRequestStatus {
   REJECTED
 }
 
+enum RegistrationPaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum OverageInvoiceStatus {
   DRAFT
   SENT
@@ -68,6 +74,8 @@ model User {
   ownerSubscriptions OwnerSubscription[]
   campaignRequests   SmsCampaignRequest[] @relation("OwnerCampaignRequests")
   overageInvoices    OverageInvoice[]
+  registrationPayments         RegistrationPayment[] @relation("OwnerRegistrationPayments")
+  reviewedRegistrationPayments RegistrationPayment[] @relation("ReviewerRegistrationPayments")
 
   @@map("users")
 }
@@ -85,7 +93,8 @@ model SubscriptionPlan {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  ownerSubscriptions OwnerSubscription[]
+  ownerSubscriptions   OwnerSubscription[]
+  registrationPayments RegistrationPayment[]
 
   @@map("subscription_plans")
 }
@@ -327,4 +336,29 @@ model OverageInvoice {
   @@index([ownerId])
   @@index([status])
   @@map("overage_invoices")
+}
+
+/// Payment receipt an owner uploads at registration (feature 002). Latest row = current.
+model RegistrationPayment {
+  id              String                    @id @default(uuid())
+  ownerId         String                    @map("owner_id")
+  planId          String                    @map("plan_id")
+  amountCents     Int                       @map("amount_cents")
+  currency        String                    @db.VarChar(3)
+  receiptPublicId String                    @map("receipt_public_id")
+  receiptFormat   String                    @map("receipt_format") @db.VarChar(10)
+  status          RegistrationPaymentStatus @default(PENDING)
+  rejectionReason String?                   @map("rejection_reason") @db.Text
+  reviewedById    String?                   @map("reviewed_by_id")
+  reviewedAt      DateTime?                 @map("reviewed_at")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
+
+  owner      User             @relation("OwnerRegistrationPayments", fields: [ownerId], references: [id], onDelete: Cascade)
+  reviewedBy User?            @relation("ReviewerRegistrationPayments", fields: [reviewedById], references: [id], onDelete: SetNull)
+  plan       SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([ownerId, createdAt])
+  @@index([status])
+  @@map("registration_payments")
 }

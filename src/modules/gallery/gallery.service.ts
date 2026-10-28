@@ -3,7 +3,7 @@ import { Role } from '@prisma/client';
 import { DomainException } from '../../common/exceptions/domain.exception';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { PlanGuardService } from '../plan-guard/plan-guard.service';
-import { CloudinaryService } from './cloudinary.service';
+import { CloudinaryService } from '../../common/cloudinary/cloudinary.service';
 
 @Injectable()
 export class GalleryService {

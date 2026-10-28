@@ -44,6 +44,21 @@ export class PlanGuardService {
     }
   }
 
+  /** Owner must be approved (ACTIVE) to publish salons or take bookings (spec 002). */
+  async requireApprovedAccount(ownerId: string): Promise<void> {
+    const owner = await this.prisma.user.findUnique({
+      where: { id: ownerId },
+      select: { accountStatus: true },
+    });
+    if (owner?.accountStatus !== 'ACTIVE') {
+      throw new DomainException(
+        'ACCOUNT_NOT_APPROVED',
+        'This account is waiting for payment verification by the platform admin',
+        403,
+      );
+    }
+  }
+
   async checkSalonLimit(ownerId: string): Promise<void> {
     const limits = await this.getActiveLimits(ownerId);
     if (limits.maxSalons === -1) return;

@@ -7,6 +7,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { AdminService } from './admin.service';
+import { PaymentDetailsDto } from './dto/payment-details.dto';
 import { OverageService } from './overage.service';
 
 @ApiTags('admin')
@@ -55,6 +56,11 @@ export class AdminController {
   @Patch('website/footer')
   saveFooter(@Body() body: { footerText: string; supportEmail: string }) {
     return this.adminService.saveFooter(body);
+  }
+
+  @Patch('website/payment-details')
+  savePaymentDetails(@Body() dto: PaymentDetailsDto) {
+    return this.adminService.savePaymentDetails(dto);
   }
 
   @Patch('website/seo')

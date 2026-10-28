@@ -4,4 +4,6 @@ export enum NotificationJobName {
   BookingCreated = 'booking.created',
   BookingStatusUpdated = 'booking.status_updated',
   SubscriptionExpiring = 'subscription.expiring',
+  RegistrationPaymentApproved = 'registration-payment.approved',
+  RegistrationPaymentRejected = 'registration-payment.rejected',
 }

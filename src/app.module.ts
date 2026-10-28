@@ -25,6 +25,7 @@ import { SearchModule } from './modules/search/search.module';
 import { SitemapModule } from './modules/sitemap/sitemap.module';
 import { TechniciansModule } from './modules/technicians/technicians.module';
 import { PromoCodesModule } from './modules/promo-codes/promo-codes.module';
+import { RegistrationPaymentsModule } from './modules/registration-payments/registration-payments.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -100,6 +101,7 @@ import { HealthController } from './health/health.controller';
     OwnerSubscriptionsModule,
     GalleryModule,
     AdminModule,
+    RegistrationPaymentsModule,
     SearchModule,
     SitemapModule,
     TechniciansModule,

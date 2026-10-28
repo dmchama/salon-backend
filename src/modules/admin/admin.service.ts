@@ -4,6 +4,30 @@ import { DomainException } from '../../common/exceptions/domain.exception';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { SmslenzService } from '../notifications/providers/smslenz.service';
+import { PaymentDetailsDto } from './dto/payment-details.dto';
+
+type PaymentDetails = {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  branch: string;
+  instructions: string;
+};
+
+/** Stored payment details, or null when the required fields are missing (spec 002 AC21). */
+function toPaymentDetails(raw: unknown): PaymentDetails | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const details = {
+    bankName: str(r.bankName),
+    accountName: str(r.accountName),
+    accountNumber: str(r.accountNumber),
+    branch: str(r.branch),
+    instructions: str(r.instructions),
+  };
+  return details.bankName && details.accountName && details.accountNumber ? details : null;
+}
 
 type HeroSlide = {
   id: string;
@@ -167,6 +191,11 @@ export class AdminService {
           take: 1,
           include: { plan: { select: { name: true } } },
         },
+        registrationPayments: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { id: true, status: true, createdAt: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -185,6 +214,7 @@ export class AdminService {
         subscription: sub
           ? { planName: sub.plan.name, subStatus: sub.status, expiresAt: sub.expiresAt }
           : null,
+        registrationPayment: u.registrationPayments[0] ?? null,
       };
     });
   }
@@ -208,7 +238,24 @@ export class AdminService {
         typeof map.metaDescription === 'string'
           ? map.metaDescription
           : 'Book premium salon services instantly.',
+      paymentDetails: toPaymentDetails(map.paymentDetails),
     };
+  }
+
+  async savePaymentDetails(dto: PaymentDetailsDto) {
+    const value = {
+      bankName: dto.bankName.trim(),
+      accountName: dto.accountName.trim(),
+      accountNumber: dto.accountNumber.trim(),
+      branch: dto.branch?.trim() ?? '',
+      instructions: dto.instructions?.trim() ?? '',
+    };
+    await this.prisma.websiteSetting.upsert({
+      where: { key: 'paymentDetails' },
+      update: { value },
+      create: { key: 'paymentDetails', value },
+    });
+    return { paymentDetails: toPaymentDetails(value) };
   }
 
   async saveHeroSlides(slides: HeroSlide[]) {

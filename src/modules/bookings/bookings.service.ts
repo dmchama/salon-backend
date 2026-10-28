@@ -61,6 +61,7 @@ export class BookingsService {
     }
     this.logger.log(`[create] Salon found: "${salon.name}" owner=${salon.owner.id}`);
 
+    await this.planGuard.requireApprovedAccount(salon.owner.id);
     await this.planGuard.requireActiveSubscription(salon.owner.id);
     const isOverage = await this.planGuard.isBookingOverage(salon.owner.id);
     this.logger.log(`[create] Plan guard passed — isOverage=${isOverage}`);
